@@ -1,0 +1,13 @@
+/testgit
+/cmake-build-debug/
+/pybind11/
+/cmake/
+/data_raw/
+/data/
+/venv/
+.idea/
+*.cmake
+*.bin
+build/
+testgit_track_rename
+__pycache__/

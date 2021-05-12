@@ -1,0 +1,247 @@
+syntax = "proto3";
+
+//option java_multiple_files = true;
+//option java_package = "io.grpc.examples.prototest";
+//option java_outer_classname = "ProtoTest";
+//option objc_class_prefix = "PT";
+
+
+
+package dgnn_test;
+
+service DgnnProtoService{
+  rpc add1(intM) returns (intM){}
+  rpc sendDataToEachWorker(DataMessage) returns (BoolMessage){}
+  rpc pullDataFromServer(intM) returns (DataMessage){}
+  rpc pullDataFromMaster(ContextMessage) returns (DataMessage){}
+  rpc pullDataFromMasterGeneral(ContextMessage) returns (DataMessage){}
+  rpc initParameter(NetInfoMessage) returns (BoolMessage){}
+  rpc pullWeights(IntMessage) returns (WeightsAndBiasMessage){}
+  rpc pullBias(IntMessage) returns(WeightsAndBiasMessage){}
+  rpc barrier(BoolMessage) returns(BoolMessage){}
+  rpc workerPullEmb(EmbMessage) returns(EmbMessage){}
+  rpc Server_SendAndUpdateModels(GradientMessage) returns(BoolMessage){}
+  rpc TestVariant(TestVMessage) returns(BoolMessage) {}
+  rpc Test1Bit(BitArrayMessage) returns(BitArrayMessage) {}
+  rpc workerPullEmbCompress(EmbMessage) returns(EmbMessage){}
+  rpc workerPullG(EmbMessage) returns(EmbMessage){}
+  rpc workerPullGCompress(EmbMessage) returns(EmbMessage){}
+  rpc testLargeSize(LargeMessage) returns (LargeMessage){}
+  rpc testSmallSize(SmallMessage) returns (SmallMessage){}
+//  rpc workerPullEmbCompress_iter(EmbMessage) returns(EmbMessage){}
+  rpc workerPullEmbTrend(EmbMessage) returns(EmbMessage){}
+  rpc workerPullEmbTrendSelect(EmbMessage) returns(EmbMessage){}
+  rpc sendAccuracy(AccuracyMessage) returns(AccuracyMessage){}
+  rpc freeMaster(BoolMessage) returns(BoolMessage){}
+//Yu
+  rpc workerSendTrainNode(NodeMessage) returns(BoolMessage){}
+  rpc serverSendTrainNode(ContextMessage) returns(NodeMessage){}
+  rpc workerSendValNode(NodeMessage) returns(BoolMessage){}
+  rpc serverSendValNode(ContextMessage) returns(NodeMessage){}
+  rpc workerSendTestNode(NodeMessage) returns(BoolMessage){}
+  rpc serverSendTestNode(ContextMessage) returns(NodeMessage){}
+}
+
+message AccuracyMessage{
+  float val_acc=1;
+  float val_acc_entire=2;
+  float train_acc=3;
+  float train_acc_entire=4;
+  float test_acc=5;
+  float test_acc_entire=6;
+  float test_f1=7;
+  float val_f1=8;
+  float test_f1_entire=9;
+  float val_f1_entire=10;
+}
+
+message LargeMessage{
+  repeated int32 a=1;
+  repeated int32 b=2;
+  repeated int32 c=3;
+  repeated int32 d=4;
+}
+
+message SmallMessage{
+  repeated int32 a=1;
+}
+
+
+message BitArrayMessage{
+  repeated bool array=1;
+}
+
+message EmbMessage{
+  repeated int32 nodes=1;
+  repeated float values=2;
+  repeated IntTensorMessage embs=3;
+  bool ifCompensate=4;
+  int32 layerId=5;
+  int32 iterRound=6;
+  ReqEmbMessage denseEmbMessage=7;
+  string compensateMethod=8;
+  int32 bucketNum=9;
+  int32 changeToIter=10;
+  int32 workerId=11;
+  int32 layerNum=12;
+  int32 shapedim=13;
+  int32 epoch=14;
+  int32 trend=15;
+  ChangeRateMessage changeRate=16;
+  int32 bitNum=17;
+  repeated float resp_none_compress_emb_concat=18;
+  int32 resp_featdim_size=19;
+  int32 resp_node_size=20;
+  repeated fixed32 resp_compress_emb_concat=21;
+  repeated float resp_none_compress_rate_concat=22;
+  repeated fixed32 value_select_flags=23;
+  float comp_data_percent=24;
+
+}
+
+message RespEmbSparseMessage{
+  repeated int32 nodes=1;
+  repeated IntTensorMessage embs=2;
+  repeated float values=3;
+  int32 layerId=4;
+  ReqEmbMessage denseEmbMessage=5;
+  int32 shapeDim=6;
+
+}
+
+message ByteTensorMessage{
+  int32 vid=1;
+  repeated bytes tensor=2;
+}
+
+message IntTensorMessage{
+  int32 vid=1;
+  repeated fixed32 tensor=2;
+}
+
+message ReqEmbMessage{
+  repeated int32 nodes=1;
+  repeated TensorMessage embs=2;
+  int32 layerId=3;
+  int32 epoch=4;
+  int32 workerId=5;
+}
+
+message ChangeRateMessage{
+  repeated int32 nodes=1;
+  repeated TensorMessage changeMatrix=2;
+  int32 layerId=3;
+  int32 epoch=4;
+}
+
+message TensorMessage{
+  int32 vid=1;
+  repeated float tensor=2;
+}
+
+
+message TestVMessage{
+  repeated uint32 values=1;
+}
+
+message GradientMessage{
+  int32 worker_id=1;
+  repeated WeightsAndBiasMessage grads=2;
+  float lr=3;
+}
+
+
+
+message WeightsAndBiasMessage{
+  repeated TensorMessage weights=1;
+  TensorMessage bias=2;
+}
+
+message IntMessage{
+  int32 id=1;
+}
+
+
+
+
+message ContextMessage{
+  int32 workerId = 1;
+  repeated string address = 2;
+  int32 workerNum = 3;
+  PartitionMessage partition = 4;
+}
+
+message NetInfoMessage{
+  int32 wid = 1;
+  int32 featureDim = 2;
+  repeated int32 hiddenDim = 3;
+  int32 classDim = 4;
+  int32 workerNum=5;
+  int32 serverNum=6;
+  repeated WeightMessage weights=7;
+  repeated TensorMessage bias=8;
+
+}
+
+message WeightMessage{
+    repeated TensorMessage weight=1;
+}
+
+
+
+message PartitionMessage{
+  int32 dataNum = 1;
+  int32 workerNum = 2;
+  string dataPath = 3;
+  int32 featureDim = 4;
+  int32 classNum = 5;
+  string partitionMethod=6;
+  int32 edgeNum=7;
+}
+
+
+message intM{
+  int32 value = 1;
+}
+
+message DataMessage{
+  NodeMessage nodeList = 1;
+  AdjMessage adjList = 2;
+  FeatureMessage featureList = 3;
+  LabelMessage labelList = 4;
+  repeated NodeMessage nodesForEachWorker=5;
+
+  message FeatureMessage{
+    repeated FeatureItem features = 1;
+
+    message FeatureItem{
+      int32 vid = 1;
+      repeated float feature = 2;
+    }
+  }
+
+  message LabelMessage{
+    repeated LabelItem labels = 1;
+    message LabelItem{
+      int32 vid = 1;
+      int32 label = 2;
+    }
+  }
+
+  message AdjMessage{
+    repeated AdjItem adjs = 1;
+    message AdjItem{
+      int32 vid = 1;
+      repeated int32 neibors = 2;
+    }
+  }
+
+}
+
+message NodeMessage{
+  repeated int32 nodes = 1;
+}
+
+message BoolMessage{
+  bool flag = 1;
+}
