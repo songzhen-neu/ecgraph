@@ -45,10 +45,15 @@ int GeneralPartition::startPartition(int worker_num, string partitionMethod, int
 //    string adjFile = pwd+"data_raw/cora/edges.txt";
 //    string featFile = pwd+"data_raw/cora/featsClass.txt";
 
-    string adjFile = pwd + this->filename + "/edges.txt";
-    string featFile = pwd + this->filename + "/featsClass.txt";
+//    string adjFile = pwd + this->filename + "/edges.txt";
+//    string featFile = pwd + this->filename + "/featsClass.txt";
+//    string partitionFile =
+//            pwd + this->filename + "/nodesPartition" + "." + partitionMethod + to_string(worker_num) + ".txt";
+    string adjFile =  this->filename + "/edges.txt";
+    string featFile =  this->filename + "/featsClass.txt";
     string partitionFile =
-            pwd + this->filename + "/nodesPartition" + "." + partitionMethod + to_string(worker_num) + ".txt";
+            this->filename + "/nodesPartition" + "." + partitionMethod + to_string(worker_num) + ".txt";
+
     cout << "adjfile:" << adjFile << endl;
     cout << "featFle:" << featFile << endl;
     cout << "partition file path:" << partitionFile << endl;

@@ -111,7 +111,7 @@ PYBIND11_MODULE(example2, m) {
             .def("getChangeRate",&DGNNClient::getChangeRate)
             .def("initCompressBitMap",&DGNNClient::initCompressBitMap)
             .def("freeSpace",&DGNNClient::freeSpace)
-	    .def("sendTrainNode",&DGNNClient::sendTrainNode) //Yu
+            .def("sendTrainNode",&DGNNClient::sendTrainNode) //Yu
             .def("pullTrainNode",&DGNNClient::pullTrainNode) //Yu
             .def("sendValNode",&DGNNClient::sendValNode) //Yu
             .def("pullValNode",&DGNNClient::pullValNode) //Yu

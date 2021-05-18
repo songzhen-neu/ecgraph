@@ -34,8 +34,8 @@ class Context(object):
         # 'test_num':55334,
 
 
-        'data_path': '../../data/cora',
-        'raw_data_path':'../../data_raw/cora',
+        'data_path': '/mnt/data/cora/',
+        'raw_data_path':'/mnt/data_raw/cora/',
         'hidden': [16,16],
         'data_num': 2708,
         'feature_dim': 1433,
@@ -104,7 +104,7 @@ class Context(object):
         'isChangeRate': False,
         'isChangeBitNum':False,
         'changeRateMode':'select', # select or normal
-        'partitionMethod': 'hash',  # hash,metis
+        'partitionMethod': 'metis',  # hash,metis
         # accorMix 前k-1层 compensates by Layer, the last layer compensates by Iteration;
         # accorMix2 the first k-1 compensates by Iteration, the last layer pass the complete data_raw
         # accorMix3 前n轮Mix2，从第n+1轮开始按迭代轮
@@ -123,7 +123,7 @@ class Context(object):
     weightForServer={}
 
     # server 2001 worker 3001 master 4001
-    def ipInit(self):
+    def ipInit(self,servers,workers,master):
         worker_num = glContext.config['worker_num']
         server_num = glContext.config['server_num']
         if self.config['mode'] == 'code':
@@ -133,24 +133,31 @@ class Context(object):
                 self.worker_address[i] = self.code_ip + ":300" + str(i + 1)
             for i in range(server_num):
                 self.server_address[i] = self.code_ip + ":200" + str(i + 1)
+            self.config['master_address'] = self.master_ip + ":4001"
         elif self.config['mode'] == 'test':
-            self.server_ip = "219.216.64.103"
-            self.master_ip = "219.216.64.103"
+            workers=str.split(workers,',')
+            servers=str.split(servers,',')
             for i in range(worker_num):
-                if i == 0:
-                    self.worker_address[i] = "219.216.64.103:3001"
-                elif i + 1 < 10:
-                    self.worker_address[i] = "192.168.111.10" + str(i + 1) + ":3001"
-                else:
-                    self.worker_address[i] = "192.168.111.1" + str(i + 1) + ":3001"
-            for i in range(server_num):
-                if i == 0:
-                    self.server_address[i] = "219.216.64.103:2001"
-                elif i + 1 < 10:
-                    self.server_address[i] = "192.168.111.10" + str(i + 1) + ":2001"
-                else:
-                    self.server_address[i] = "192.168.111.1" + str(i + 1) + ":2001"
-        self.config['master_address'] = self.master_ip + ":4001"
+                self.worker_address[i]=workers[i]
+                self.server_address[i]=servers[i]
+                self.config['master_address']=master
+            # self.server_ip = "219.216.64.103"
+            # self.master_ip = "219.216.64.103"
+            # for i in range(worker_num):
+            #     if i == 0:
+            #         self.worker_address[i] = "219.216.64.103:3001"
+            #     elif i + 1 < 10:
+            #         self.worker_address[i] = "192.168.111.10" + str(i + 1) + ":3001"
+            #     else:
+            #         self.worker_address[i] = "192.168.111.1" + str(i + 1) + ":3001"
+            # for i in range(server_num):
+            #     if i == 0:
+            #         self.server_address[i] = "219.216.64.103:2001"
+            #     elif i + 1 < 10:
+            #         self.server_address[i] = "192.168.111.10" + str(i + 1) + ":2001"
+            #     else:
+            #         self.server_address[i] = "192.168.111.1" + str(i + 1) + ":2001"
+
 
 
 glContext = Context()

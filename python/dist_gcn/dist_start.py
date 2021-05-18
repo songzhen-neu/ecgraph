@@ -27,7 +27,10 @@ import scipy.sparse as sp
 import context.store as store
 import util_python.param_util as pu
 
-# example2=ctypes.CDLL('../../cmake/build/example2.cpython-36m-x86_64-linux-gnu.so')
+import ctypes
+
+# example2=ctypes.CDLL('/home/songzhen/workspace2/dgnn_test/cmake/build/example2.cpython-36m-x86_64-linux-gnu.so')
+
 
 from cmake.build.example2 import *
 from context import context
@@ -494,6 +497,8 @@ if __name__ == "__main__":
                     nhid=context.glContext.config['hidden'],
                     nclass=context.glContext.config['class_num'],
                     dropout=0.5)
+
+        print(model)
 
         if context.glContext.config['id'] == 0:
             pu.assignParam()

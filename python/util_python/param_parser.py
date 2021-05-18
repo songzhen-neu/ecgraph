@@ -41,6 +41,10 @@ def parserInit():
     parser.add_argument('--val_num', type=int, help='val_num')
     parser.add_argument('--test_num', type=int, help='test_num')
 
+    parser.add_argument('--servers', type=str, help='server ip')
+    parser.add_argument('--workers', type=str, help='worker ip')
+    parser.add_argument('--master', type=str, help='master ip')
+
     args = parser.parse_args()
     if args.localCodeMode == 'true':
         context.Context.localCodeMode = True
@@ -58,13 +62,14 @@ def parserInit():
         context.glContext.config['role'] = args.role
         context.glContext.config['id'] = args.id
         context.glContext.config['mode'] = args.mode
+        context.glContext.config['hidden'] = list(map(int, args.hidden.split(',')))
         context.glContext.config['layerNum'] = len(context.glContext.config['hidden']) + 1
         context.glContext.config['worker_num'] = args.worker_num
         context.glContext.config['server_num'] = args.server_num
         context.glContext.config['data_num'] = args.data_num
         context.glContext.config['feature_dim'] = args.feature_dim
         context.glContext.config['class_num'] = args.class_num
-        context.glContext.config['hidden'] = list(map(int, args.hidden.split(',')))
+
         context.glContext.config['ifCompensate'] = args.ifCompensate
 
         context.glContext.config['isNeededExactBackProp'] = args.isNeededExactBackProp
@@ -118,7 +123,7 @@ def parserInit():
         elif args.ifBackPropCompensate == 'true':
             context.glContext.config['ifBackPropCompensate'] = True
 
-    context.glContext.ipInit()
+    context.glContext.ipInit(args.servers, args.workers, args.master)
     store.init()
     print('server:{0}'.format(context.glContext.config['server_address']))
     print('master:{0}'.format(context.glContext.config['master_address']))

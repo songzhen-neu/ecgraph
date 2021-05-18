@@ -11,3 +11,4 @@
 build/
 testgit_track_rename
 __pycache__/
+cmake-3.20.2.tar.gz
