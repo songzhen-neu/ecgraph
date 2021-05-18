@@ -454,4 +454,4 @@ def all_agg_node_num(nodes_from_server, idx_train, idx_val, idx_test, adj_lists_
             if neiborId in set_remote_test_node:
                 remote_hop_test_set.add(neiborSet)
     # 返回所有需要聚合的顶点
-    return remote_hop_train_set | set(real_train_num)
+    return remote_hop_train_set | set(real_train_num) | remote_hop_val_set | remote_hop_test_set
