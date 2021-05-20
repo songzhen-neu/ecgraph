@@ -51,23 +51,10 @@ class GCN(nn.Module):
         end = time.time()
         # print("pull weight time:{0}".format(end - start))
 
-        if context.glContext.config['isNeededExactBackProp']:
-            x = self.autograd.forward_detail(self, x, adj,nodes, epoch, weight, bias)
+        x = self.autograd.forward_detail(self, x, adj,nodes, epoch, weight, bias)
 
 
-        else:
-            if context.glContext.config["layerNum"] == 2:
-                x = self.gc1(x, adj, nodes, epoch, weight[0], bias[0])
-                x = F.relu(x)  # adj即公式Z=softmax(A~Relu(A~XW(0))W(1))中的A~
-                # x = F.dropout(x, self.dropout, training=self.training)  # x要dropout
-                x = self.gc2(x, adj, nodes, epoch, weight[1], bias[1])
-            elif context.glContext.config["layerNum"] == 3:
-                x = self.gc1(x, adj, nodes, epoch, weight[0], bias[0])
-                x = F.relu(x)  # adj即公式Z=softmax(A~Relu(A~XW(0))W(1))中的A~
-                # x = F.dropout(x, self.dropout, training=self.training)  # x要dropout
-                x = self.gc2(x, adj, nodes, epoch, weight[1], bias[1])
-                x = F.relu(x)
-                x = self.gc3(x, adj, nodes, epoch, weight[2], bias[2])
+
         remoteDataNum=0
         for i in range(len(context.glContext.config['firstHopForWorkers'])):
             if i != context.glContext.config['id']:
