@@ -82,13 +82,13 @@ class Context(object):
         'master_id': 0,
         # 'hidden': [16],
         'firstHopForWorkers': [],
-        'ifCompress': False,
+        'ifCompress': True,
         'ifCompensate': False,
         'isNeededExactBackProp': True,
         'ifMomentum': False,
         'layerNum': 2,
         'bucketNum': 8,
-        'bitNum': 2,  # 2,4,8,16bits分别对应桶数2,14,254,65534
+        'bitNum': 1,  # 2,4,8,16bits分别对应桶数2,14,254,65534
         'IterNum': 3000,
         'trend':10,
         'firstProp': True,

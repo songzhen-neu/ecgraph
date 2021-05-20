@@ -498,7 +498,7 @@ if __name__ == "__main__":
                     nclass=context.glContext.config['class_num'],
                     dropout=0.5)
 
-        print(model)
+        # print(model)
 
         if context.glContext.config['id'] == 0:
             pu.assignParam()
