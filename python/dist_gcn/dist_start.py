@@ -5,38 +5,29 @@ sys.path.insert(0, BASE_PATH)
 sys.path.insert(1, BASE_PATH + '/../')
 print(BASE_PATH)
 import time
-import torch
-import argparse
 import numpy as np
-import random
-import gc
 from sklearn.metrics import f1_score
 import util_python.param_parser as pp
 import util_python.metric as metric
-import util_python.remote_access as ra
 from sklearn.metrics import accuracy_score
-
 # BASE_PATH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # print(os.path.dirname(os.path.abspath(__file__)))
 # sys.path.insert(0, BASE_PATH)
 # # sys.path.insert(1, BASE_PATH + '/../')
 
-import torch.optim as optim
 import torch.nn.functional as F
 import scipy.sparse as sp
 import context.store as store
 import util_python.param_util as pu
 
-import ctypes
-
-# example2=ctypes.CDLL('/home/songzhen/workspace2/dgnn_test/cmake/build/example2.cpython-36m-x86_64-linux-gnu.so')
-
+# example2=ctypes.CDLL('../../cmake/build/example2.cpython-36m-x86_64-linux-gnu.so')
 
 from cmake.build.example2 import *
 from context import context
 
 from dist_gcn.models import GCN
-import autograd.autograd as atg
+#import autograd.autograd as atg
+import autograd.autograd_new as autoG
 from util_python import data_trans as dt
 
 
@@ -74,6 +65,8 @@ def run_gnn(dgnnClient, model):
     train_num = data['train_num']
     test_num = data['test_num']
     val_num = data['val_num']
+
+    #change add
 
     edges = []
     # 从adj中解析出edge
@@ -113,24 +106,27 @@ def run_gnn(dgnnClient, model):
 
         # slow
         start = time.time()
-        output = model(features, adjs, nodes_from_server, epoch)
+
+        output = model(features, adjs, nodes_from_server, epoch) # change
         end = time.time()
         # print("output time:{0}".format(end - start))
 
         start_othertime = time.time()
+        autograd.set_HZ(output, True, True, context.glContext.config["layerNum"])
+        #change
 
-        if context.glContext.config["layerNum"] == 2:
-            atg.H2 = output
-            atg.Z2.required_grad = True
-            atg.Z2.retain_grad()
-        elif context.glContext.config["layerNum"] == 3:
-            atg.H3 = output
-            atg.Z3.required_grad = True
-            atg.Z3.retain_grad()
-        elif context.glContext.config["layerNum"] == 4:
-            atg.H4 = output
-            atg.Z4.required_grad = True
-            atg.Z4.retain_grad()
+        # if context.glContext.config["layerNum"] == 2:
+        #     atg.H2 = output
+        #     atg.Z2.required_grad = True
+        #     atg.Z2.retain_grad()
+        # elif context.glContext.config["layerNum"] == 3:
+        #     atg.H3 = output
+        #     atg.Z3.required_grad = True
+        #     atg.Z3.retain_grad()
+        # elif context.glContext.config["layerNum"] == 4:
+        #     atg.H4 = output
+        #     atg.Z4.required_grad = True
+        #     atg.Z4.retain_grad()
 
         # print(output)
         loss_train = F.nll_loss(output[idx_train], labels[idx_train])
@@ -144,172 +140,173 @@ def run_gnn(dgnnClient, model):
         loss_train.backward()  # 反向求导  Back Propagation
 
         # 需要准确的反向传播过程
-
-        if context.glContext.config["layerNum"] == 2:
-            atg.G2 = atg.Z2.grad
-            # 算出G2后，给自己所在的server赋值
-            G_list = atg.G2.detach().numpy().tolist()
-            G_dict = {}
-            for i in range(len(G_list)):
-                G_dict[id_new2old_map[i]] = G_list[i]
-
-            dgnnClient.setG(G_dict, 2)
-            # 同步一下
-
-
-
-            atg.Y1 = torch.mm(atg.A_X_H1.t(), atg.G2)
-            atg.sigma_z1_grad = atg.Z1.data
-            atg.sigma_z1_grad = torch.tensor(np.where(atg.sigma_z1_grad > 0, 1, 0))
-
-            # 需要从其他机器中获取一阶邻居的G2，然后按照old-new重新拼接到G2中
-            # 这段跟获取一阶邻居的嵌入表示类似,pull g2 to compute g1
-            start = time.time()
-
-            context.glContext.dgnnServerRouter[0].server_Barrier(0)
-            ra.pullNeighborG(nodes, epoch, 2)
-            end = time.time()
-            # if context.glContext.ifShowInfo:
-            # print("pull neiborgh G time:{0}".format(end - start))
-
-            a = torch.spmm(adjs, atg.G2)
-            b = torch.mm(a, model.gc2.weight.t())
-            atg.G1 = torch.mul(b, atg.sigma_z1_grad)
-            atg.Y0 = torch.mm(atg.A_X_H0.t(), atg.G1)
-            atg.B1 = atg.G2.detach().numpy().sum(axis=0)
-            atg.B0 = atg.G1.detach().numpy().sum(axis=0)
-            np.set_printoptions(threshold=sys.maxsize)
-
-            model.gc1.weight.grad.data = atg.Y0
-            model.gc1.bias.grad.data = torch.FloatTensor(atg.B0)
-            model.gc2.weight.grad.data = atg.Y1
-            model.gc2.bias.grad.data = torch.FloatTensor(atg.B1)
-
-
-        elif context.glContext.config["layerNum"] == 3:
-            atg.G3 = atg.Z3.grad
-            # 算出G2后，给自己所在的server赋值
-            G_list = atg.G3.detach().numpy().tolist()
-            G_dict = {}
-            for i in range(len(G_list)):
-                G_dict[id_new2old_map[i]] = G_list[i]
-
-            dgnnClient.setG(G_dict, 3)
-            # 同步一下
-
-            # G3本地完全的，不需要从其他机器获取
-            atg.Y2 = torch.mm(atg.A_X_H2.t(), atg.G3)
-            atg.B2 = atg.G3.detach().numpy().sum(axis=0)
-
-            atg.sigma_z2_grad = atg.Z2.data
-            atg.sigma_z2_grad = torch.tensor(np.where(atg.sigma_z2_grad > 0, 1, 0))
-            # 需要从其他机器中获取一阶邻居的G2，然后按照old-new重新拼接到G2中
-            # 这段跟获取一阶邻居的嵌入表示类似
-            context.glContext.dgnnServerRouter[0].server_Barrier(0)
-            ra.pullNeighborG(nodes, epoch, 3)
-            a = torch.spmm(adjs, atg.G3)
-            b = torch.mm(a, model.gc3.weight.t())
-            atg.G2 = torch.mul(b, atg.sigma_z2_grad)
-            atg.Y1 = torch.mm(atg.A_X_H1.t(), atg.G2)
-            atg.B1 = atg.G2.detach().numpy().sum(axis=0)
-
-            # set G2
-            G_list = atg.G2.detach().numpy().tolist()
-            G_dict = {}
-            for i in range(len(G_list)):
-                G_dict[id_new2old_map[i]] = G_list[i]
-            dgnnClient.setG(G_dict, 2)
-
-            atg.sigma_z1_grad = atg.Z1.data
-            atg.sigma_z1_grad = torch.tensor(np.where(atg.sigma_z1_grad > 0, 1, 0))
-
-            context.glContext.dgnnServerRouter[0].server_Barrier(0)
-            ra.pullNeighborG(nodes, epoch, 2)
-            a = torch.spmm(adjs, atg.G2)
-            b = torch.mm(a, model.gc2.weight.t())
-            atg.G1 = torch.mul(b, atg.sigma_z1_grad)
-            atg.Y0 = torch.mm(atg.A_X_H0.t(), atg.G1)
-            atg.B0 = atg.G1.detach().numpy().sum(axis=0)
-
-            np.set_printoptions(threshold=sys.maxsize)
-            model.gc1.weight.grad.data = atg.Y0
-            model.gc1.bias.grad.data = torch.FloatTensor(atg.B0)
-            model.gc2.weight.grad.data = atg.Y1
-            model.gc2.bias.grad.data = torch.FloatTensor(atg.B1)
-            model.gc3.weight.grad.data = atg.Y2
-            model.gc3.bias.grad.data = torch.FloatTensor(atg.B2)
-
-        elif context.glContext.config["layerNum"] == 4:
-            atg.G4 = atg.Z4.grad
-            # 算出G2后，给自己所在的server赋值
-            G_list = atg.G4.detach().numpy().tolist()
-            G_dict = {}
-            for i in range(len(G_list)):
-                G_dict[id_new2old_map[i]] = G_list[i]
-
-            dgnnClient.setG(G_dict, 4)
-
-            # G4本地完全的，不需要从其他机器获取
-            atg.Y3 = torch.mm(atg.A_X_H3.t(), atg.G4)
-            atg.B3 = atg.G4.detach().numpy().sum(axis=0)
-
-            atg.sigma_z3_grad = atg.Z3.data
-            atg.sigma_z3_grad = torch.tensor(np.where(atg.sigma_z3_grad > 0, 1, 0))
-            # 需要从其他机器中获取一阶邻居的G2，然后按照old-new重新拼接到G2中
-            # 这段跟获取一阶邻居的嵌入表示类似
-            context.glContext.dgnnServerRouter[0].server_Barrier(0)
-            ra.pullNeighborG(nodes, epoch, 4)
-            a = torch.spmm(adjs, atg.G4)
-            b = torch.mm(a, model.gc4.weight.t())
-            atg.G3 = torch.mul(b, atg.sigma_z3_grad)
-            atg.Y2 = torch.mm(atg.A_X_H2.t(), atg.G3)
-            atg.B2 = atg.G3.detach().numpy().sum(axis=0)
-
-            # set G3
-            G_list = atg.G3.detach().numpy().tolist()
-            G_dict = {}
-            for i in range(len(G_list)):
-                G_dict[id_new2old_map[i]] = G_list[i]
-            dgnnClient.setG(G_dict, 3)
-
-            atg.sigma_z2_grad = atg.Z2.data
-            atg.sigma_z2_grad = torch.tensor(np.where(atg.sigma_z2_grad > 0, 1, 0))
-
-            context.glContext.dgnnServerRouter[0].server_Barrier(0)
-            ra.pullNeighborG(nodes, epoch, 3)
-            a = torch.spmm(adjs, atg.G3)
-            b = torch.mm(a, model.gc3.weight.t())
-            atg.G2 = torch.mul(b, atg.sigma_z2_grad)
-            atg.Y1 = torch.mm(atg.A_X_H1.t(), atg.G2)
-            atg.B1 = atg.G2.detach().numpy().sum(axis=0)
-
-            # set G2
-            G_list = atg.G2.detach().numpy().tolist()
-            G_dict = {}
-            for i in range(len(G_list)):
-                G_dict[id_new2old_map[i]] = G_list[i]
-            dgnnClient.setG(G_dict, 2)
-
-            atg.sigma_z1_grad = atg.Z1.data
-            atg.sigma_z1_grad = torch.tensor(np.where(atg.sigma_z1_grad > 0, 1, 0))
-
-            context.glContext.dgnnServerRouter[0].server_Barrier(0)
-            ra.pullNeighborG(nodes, epoch, 2)
-            a = torch.spmm(adjs, atg.G2)
-            b = torch.mm(a, model.gc2.weight.t())
-            atg.G1 = torch.mul(b, atg.sigma_z1_grad)
-            atg.Y0 = torch.mm(atg.A_X_H0.t(), atg.G1)
-            atg.B0 = atg.G1.detach().numpy().sum(axis=0)
-
-            np.set_printoptions(threshold=sys.maxsize)
-            model.gc1.weight.grad.data = atg.Y0
-            model.gc1.bias.grad.data = torch.FloatTensor(atg.B0)
-            model.gc2.weight.grad.data = atg.Y1
-            model.gc2.bias.grad.data = torch.FloatTensor(atg.B1)
-            model.gc3.weight.grad.data = atg.Y2
-            model.gc3.bias.grad.data = torch.FloatTensor(atg.B2)
-            model.gc4.weight.grad.data = atg.Y3
-            model.gc4.bias.grad.data = torch.FloatTensor(atg.B3)
+        autograd.back_prop_detail(dgnnClient,model,id_new2old_map, nodes, epoch, adjs)
+        # if context.glContext.config["layerNum"] == 2:
+        #     atg.G2 = atg.Z2.grad
+        #     # 算出G2后，给自己所在的server赋值
+        #     G_list = atg.G2.detach().numpy().tolist()
+        #     G_dict = {}
+        #     for i in range(len(G_list)):
+        #         G_dict[id_new2old_map[i]] = G_list[i]
+        #
+        #     dgnnClient.setG(G_dict, 2)
+        #     # 同步一下
+        #
+        #
+        #
+        #     atg.Y1 = torch.mm(atg.A_X_H1.t(), atg.G2)
+        #     atg.sigma_z1_grad = atg.Z1.data
+        #     atg.sigma_z1_grad = torch.tensor(np.where(atg.sigma_z1_grad > 0, 1, 0))
+        #
+        #     # 需要从其他机器中获取一阶邻居的G2，然后按照old-new重新拼接到G2中
+        #     # 这段跟获取一阶邻居的嵌入表示类似,pull g2 to compute g1
+        #     start = time.time()
+        #
+        #     context.glContext.dgnnServerRouter[0].server_Barrier(0)
+        #     ra.pullNeighborG(nodes, epoch, 2)
+        #     end = time.time()
+        #     # if context.glContext.ifShowInfo:
+        #     # print("pull neiborgh G time:{0}".format(end - start))
+        #
+        #     a = torch.spmm(adjs, atg.G2)
+        #     b = torch.mm(a, model.gc2.weight.t())
+        #     atg.G1 = torch.mul(b, atg.sigma_z1_grad)
+        #     atg.Y0 = torch.mm(atg.A_X_H0.t(), atg.G1)
+        #     atg.B1 = atg.G2.detach().numpy().sum(axis=0)
+        #     atg.B0 = atg.G1.detach().numpy().sum(axis=0)
+        #     np.set_printoptions(threshold=sys.maxsize)
+        #
+        #     model.gc1.weight.grad.data = atg.Y0
+        #     model.gc1.bias.grad.data = torch.FloatTensor(atg.B0)
+        #     model.gc2.weight.grad.data = atg.Y1
+        #     model.gc2.bias.grad.data = torch.FloatTensor(atg.B1)
+        #
+        #
+        # elif context.glContext.config["layerNum"] == 3:
+        #     atg.G3 = atg.Z3.grad
+        #     # 算出G2后，给自己所在的server赋值
+        #     G_list = atg.G3.detach().numpy().tolist()
+        #     G_dict = {}
+        #     for i in range(len(G_list)):
+        #         G_dict[id_new2old_map[i]] = G_list[i]
+        #
+        #     dgnnClient.setG(G_dict, 3)
+        #     # 同步一下
+        #
+        #     # G3本地完全的，不需要从其他机器获取
+        #     atg.Y2 = torch.mm(atg.A_X_H2.t(), atg.G3)
+        #     atg.B2 = atg.G3.detach().numpy().sum(axis=0)
+        #
+        #     atg.sigma_z2_grad = atg.Z2.data
+        #     atg.sigma_z2_grad = torch.tensor(np.where(atg.sigma_z2_grad > 0, 1, 0))
+        #     # 需要从其他机器中获取一阶邻居的G2，然后按照old-new重新拼接到G2中
+        #     # 这段跟获取一阶邻居的嵌入表示类似
+        #     context.glContext.dgnnServerRouter[0].server_Barrier(0)
+        #     ra.pullNeighborG(nodes, epoch, 3)
+        #     a = torch.spmm(adjs, atg.G3)
+        #     b = torch.mm(a, model.gc3.weight.t())
+        #     atg.G2 = torch.mul(b, atg.sigma_z2_grad)
+        #     atg.Y1 = torch.mm(atg.A_X_H1.t(), atg.G2)
+        #     atg.B1 = atg.G2.detach().numpy().sum(axis=0)
+        #
+        #     # set G2
+        #     G_list = atg.G2.detach().numpy().tolist()
+        #     G_dict = {}
+        #     for i in range(len(G_list)):
+        #         G_dict[id_new2old_map[i]] = G_list[i]
+        #     dgnnClient.setG(G_dict, 2)
+        #
+        #     atg.sigma_z1_grad = atg.Z1.data
+        #     atg.sigma_z1_grad = torch.tensor(np.where(atg.sigma_z1_grad > 0, 1, 0))
+        #
+        #     context.glContext.dgnnServerRouter[0].server_Barrier(0)
+        #     ra.pullNeighborG(nodes, epoch, 2)
+        #     a = torch.spmm(adjs, atg.G2)
+        #     b = torch.mm(a, model.gc2.weight.t())
+        #     atg.G1 = torch.mul(b, atg.sigma_z1_grad)
+        #     atg.Y0 = torch.mm(atg.A_X_H0.t(), atg.G1)
+        #     atg.B0 = atg.G1.detach().numpy().sum(axis=0)
+        #
+        #     np.set_printoptions(threshold=sys.maxsize)
+        #     model.gc1.weight.grad.data = atg.Y0
+        #     model.gc1.bias.grad.data = torch.FloatTensor(atg.B0)
+        #     model.gc2.weight.grad.data = atg.Y1
+        #     model.gc2.bias.grad.data = torch.FloatTensor(atg.B1)
+        #     model.gc3.weight.grad.data = atg.Y2
+        #     model.gc3.bias.grad.data = torch.FloatTensor(atg.B2)
+        #
+        # elif context.glContext.config["layerNum"] == 4:
+        #     atg.G4 = atg.Z4.grad
+        #
+        #     # 算出G2后，给自己所在的server赋值
+        #     G_list = atg.G4.detach().numpy().tolist()
+        #     G_dict = {}
+        #     for i in range(len(G_list)):
+        #         G_dict[id_new2old_map[i]] = G_list[i]
+        #
+        #     dgnnClient.setG(G_dict, 4)
+        #
+        #     # G4本地完全的，不需要从其他机器获取
+        #     atg.Y3 = torch.mm(atg.A_X_H3.t(), atg.G4)
+        #     atg.B3 = atg.G4.detach().numpy().sum(axis=0)
+        #
+        #     atg.sigma_z3_grad = atg.Z3.data
+        #     atg.sigma_z3_grad = torch.tensor(np.where(atg.sigma_z3_grad > 0, 1, 0))
+        #     # 需要从其他机器中获取一阶邻居的G2，然后按照old-new重新拼接到G2中
+        #     # 这段跟获取一阶邻居的嵌入表示类似
+        #     context.glContext.dgnnServerRouter[0].server_Barrier(0)
+        #     ra.pullNeighborG(nodes, epoch, 4)
+        #     a = torch.spmm(adjs, atg.G4)
+        #     b = torch.mm(a, model.gc4.weight.t())
+        #     atg.G3 = torch.mul(b, atg.sigma_z3_grad)
+        #     atg.Y2 = torch.mm(atg.A_X_H2.t(), atg.G3)
+        #     atg.B2 = atg.G3.detach().numpy().sum(axis=0)
+        #
+        #     # set G3
+        #     G_list = atg.G3.detach().numpy().tolist()
+        #     G_dict = {}
+        #     for i in range(len(G_list)):
+        #         G_dict[id_new2old_map[i]] = G_list[i]
+        #     dgnnClient.setG(G_dict, 3)
+        #
+        #     atg.sigma_z2_grad = atg.Z2.data
+        #     atg.sigma_z2_grad = torch.tensor(np.where(atg.sigma_z2_grad > 0, 1, 0))
+        #
+        #     context.glContext.dgnnServerRouter[0].server_Barrier(0)
+        #     ra.pullNeighborG(nodes, epoch, 3)
+        #     a = torch.spmm(adjs, atg.G3)
+        #     b = torch.mm(a, model.gc3.weight.t())
+        #     atg.G2 = torch.mul(b, atg.sigma_z2_grad)
+        #     atg.Y1 = torch.mm(atg.A_X_H1.t(), atg.G2)
+        #     atg.B1 = atg.G2.detach().numpy().sum(axis=0)
+        #
+        #     # set G2
+        #     G_list = atg.G2.detach().numpy().tolist()
+        #     G_dict = {}
+        #     for i in range(len(G_list)):
+        #         G_dict[id_new2old_map[i]] = G_list[i]
+        #     dgnnClient.setG(G_dict, 2)
+        #
+        #     atg.sigma_z1_grad = atg.Z1.data
+        #     atg.sigma_z1_grad = torch.tensor(np.where(atg.sigma_z1_grad > 0, 1, 0))
+        #
+        #     context.glContext.dgnnServerRouter[0].server_Barrier(0)
+        #     ra.pullNeighborG(nodes, epoch, 2)
+        #     a = torch.spmm(adjs, atg.G2)
+        #     b = torch.mm(a, model.gc2.weight.t())
+        #     atg.G1 = torch.mul(b, atg.sigma_z1_grad)
+        #     atg.Y0 = torch.mm(atg.A_X_H0.t(), atg.G1)
+        #     atg.B0 = atg.G1.detach().numpy().sum(axis=0)
+        #
+        #     np.set_printoptions(threshold=sys.maxsize)
+        #     model.gc1.weight.grad.data = atg.Y0
+        #     model.gc1.bias.grad.data = torch.FloatTensor(atg.B0)
+        #     model.gc2.weight.grad.data = atg.Y1
+        #     model.gc2.bias.grad.data = torch.FloatTensor(atg.B1)
+        #     model.gc3.weight.grad.data = atg.Y2
+        #     model.gc3.bias.grad.data = torch.FloatTensor(atg.B2)
+        #     model.gc4.weight.grad.data = atg.Y3
+        #     model.gc4.bias.grad.data = torch.FloatTensor(atg.B3)
 
         # 求出梯度后，发送到参数服务器中进行聚合，并更新参数值
         # a=model.gc1.weight.grad
@@ -317,28 +314,32 @@ def run_gnn(dgnnClient, model):
         weights_grad_map = {}
         bias_grad_map = {}
 
-        # 这里先不做通用的，直接假定是两层，之后再改
-        if context.glContext.config["layerNum"] == 2:
-            weights_grad_map[0] = model.gc1.weight.grad.detach().numpy().tolist()
-            weights_grad_map[1] = model.gc2.weight.grad.detach().numpy().tolist()
-            bias_grad_map[0] = model.gc1.bias.grad.detach().numpy().tolist()
-            bias_grad_map[1] = model.gc2.bias.grad.detach().numpy().tolist()
-        elif context.glContext.config["layerNum"] == 3:
-            weights_grad_map[0] = model.gc1.weight.grad.detach().numpy().tolist()
-            weights_grad_map[1] = model.gc2.weight.grad.detach().numpy().tolist()
-            weights_grad_map[2] = model.gc3.weight.grad.detach().numpy().tolist()
-            bias_grad_map[0] = model.gc1.bias.grad.detach().numpy().tolist()
-            bias_grad_map[1] = model.gc2.bias.grad.detach().numpy().tolist()
-            bias_grad_map[2] = model.gc3.bias.grad.detach().numpy().tolist()
-        elif context.glContext.config["layerNum"] == 4:
-            weights_grad_map[0] = model.gc1.weight.grad.detach().numpy().tolist()
-            weights_grad_map[1] = model.gc2.weight.grad.detach().numpy().tolist()
-            weights_grad_map[2] = model.gc3.weight.grad.detach().numpy().tolist()
-            weights_grad_map[3] = model.gc4.weight.grad.detach().numpy().tolist()
-            bias_grad_map[0] = model.gc1.bias.grad.detach().numpy().tolist()
-            bias_grad_map[1] = model.gc2.bias.grad.detach().numpy().tolist()
-            bias_grad_map[2] = model.gc3.bias.grad.detach().numpy().tolist()
-            bias_grad_map[3] = model.gc4.bias.grad.detach().numpy().tolist()
+        laynum = context.glContext.config["layerNum"]
+        for i in range(laynum):
+            weights_grad_map[i] = model.gc[i+1].weight.grad.detach().numpy().tolist()
+            bias_grad_map[i] = model.gc[i+1].bias.grad.detach().numpy().tolist()
+        # # 这里先不做通用的，直接假定是两层，之后再改
+        # if context.glContext.config["layerNum"] == 2:
+        #     weights_grad_map[0] = model.gc1.weight.grad.detach().numpy().tolist()
+        #     weights_grad_map[1] = model.gc2.weight.grad.detach().numpy().tolist()
+        #     bias_grad_map[0] = model.gc1.bias.grad.detach().numpy().tolist()
+        #     bias_grad_map[1] = model.gc2.bias.grad.detach().numpy().tolist()
+        # elif context.glContext.config["layerNum"] == 3:
+        #     weights_grad_map[0] = model.gc1.weight.grad.detach().numpy().tolist()
+        #     weights_grad_map[1] = model.gc2.weight.grad.detach().numpy().tolist()
+        #     weights_grad_map[2] = model.gc3.weight.grad.detach().numpy().tolist()
+        #     bias_grad_map[0] = model.gc1.bias.grad.detach().numpy().tolist()
+        #     bias_grad_map[1] = model.gc2.bias.grad.detach().numpy().tolist()
+        #     bias_grad_map[2] = model.gc3.bias.grad.detach().numpy().tolist()
+        # elif context.glContext.config["layerNum"] == 4:
+        #     weights_grad_map[0] = model.gc1.weight.grad.detach().numpy().tolist()
+        #     weights_grad_map[1] = model.gc2.weight.grad.detach().numpy().tolist()
+        #     weights_grad_map[2] = model.gc3.weight.grad.detach().numpy().tolist()
+        #     weights_grad_map[3] = model.gc4.weight.grad.detach().numpy().tolist()
+        #     bias_grad_map[0] = model.gc1.bias.grad.detach().numpy().tolist()
+        #     bias_grad_map[1] = model.gc2.bias.grad.detach().numpy().tolist()
+        #     bias_grad_map[2] = model.gc3.bias.grad.detach().numpy().tolist()
+        #     bias_grad_map[3] = model.gc4.bias.grad.detach().numpy().tolist()
         # print(weights_grad_map[0])
         # print(weights_grad_map[1])
         # print(bias_grad_map[0])
@@ -492,13 +493,14 @@ if __name__ == "__main__":
         # 初始化参数服务器模型，现在假设参数服务器就一台机器，先不进行参数划分
         # 输入：节点属性维度、隐藏层维度、标签维度
 
+        autograd = autoG.AutoGrad()
+        activation = [F.relu, F.relu, F.relu, F.relu]
+        autograd.set_activation(activation)
         # assign parameter
         model = GCN(nfeat=context.glContext.config['feature_dim'],
                     nhid=context.glContext.config['hidden'],
                     nclass=context.glContext.config['class_num'],
-                    dropout=0.5)
-
-        print(model)
+                    dropout=0.5, autograd=autograd)
 
         if context.glContext.config['id'] == 0:
             pu.assignParam()
