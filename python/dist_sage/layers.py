@@ -1,84 +1,27 @@
-import math
-
 import torch
 
 import torch.nn as nn
 
 from context import context
 import numpy as np
-import autograd.autograd as atg
+#import autograd.autograd as atg
 import context.momentum as mom
 import context.store as store
-from multiprocessing import Process, Queue
 # from cmake.build.example2 import *
 from cmake.build.example2 import *
-import _thread
-from threading import Lock
-import threading
 
 import time
 
 
-# from dist_gcn.dist_start import dgnnServerRouter
 
 
-def accessEmb(needed_emb_map_from_workers, i, epoch, layer_id):
-    if context.glContext.config['isChangeRate'] and store.isTrain:
-        # print("epoch:{0}".format(epoch))
-        needed_emb_map_from_workers[i] = \
-            context.glContext.dgnnWorkerRouter[i].worker_pull_emb_trend(
-                context.glContext.config['firstHopForWorkers'][i],
-                layer_id, epoch,
-                context.glContext.config['bucketNum'],
-                context.glContext.worker_id, i,
-                context.glContext.config['layerNum'],
-                context.glContext.config['trend'],
-                context.glContext.config['bitNum'])
-        if (epoch + 1) % context.glContext.config['trend'] == 0:
-            if not store.changeRate.__contains__(i):
-                store.changeRate[i] = {}
-                store.embs[i] = {}
-
-            store.changeRate[i][layer_id] = \
-                context.glContext.dgnnWorkerRouter[i].getChangeRate(i, layer_id)
-            store.embs[i][layer_id] = needed_emb_map_from_workers[i]
-
-        if int((epoch) / context.glContext.config['trend']) > 0 and (epoch + 1) % context.glContext.config[
-            'trend'] != 0:
-            round = (epoch + 1) % context.glContext.config['trend']
-            changeEmb = store.embs[i][layer_id] + round * store.changeRate[i][layer_id]
-            needed_emb_map_from_workers[i] = (needed_emb_map_from_workers[i] + changeEmb) / 2
-    else:
-        if context.glContext.config['ifCompress']:
-            needed_emb_map_from_workers[i] = \
-                context.glContext.dgnnWorkerRouter[i].worker_pull_emb_compress(
-                    context.glContext.config['firstHopForWorkers'][i],
-                    context.glContext.config['ifCompensate'], layer_id, epoch,
-                    context.glContext.config['compensateMethod'],
-                    context.glContext.config['bucketNum'],
-                    context.glContext.config['changeToIter'],
-                    context.glContext.worker_id,
-                    context.glContext.config['layerNum'],
-                    context.glContext.config['bitNum'])
-        else:
-            # needed_emb_map_from_workers[i] = \
-            #     context.glContext.dgnnWorkerRouter[i].worker_pull_needed_emb_compress_iter(
-            #     context.glContext.config['firstHopForWorkers'][i],
-            #     context.glContext.config['ifCompensate'],self.layer_id,epoch,
-            #     context.glContext.config['bucketNum']
-            # )
-            needed_emb_map_from_workers[i] = \
-                context.glContext.dgnnWorkerRouter[i].worker_pull_needed_emb(
-                    context.glContext.config['firstHopForWorkers'][i], epoch, layer_id, context.glContext.config['id'],
-                    i)
-    store.threadCountList[layer_id] += 1
 
 
-class SAGELayer(nn.Module):
+class SAGE_Layer(nn.Module):
 
     # 初始化层：输入feature维度，输出feature维度，权重，偏移
-    def __init__(self, in_features, out_features, layer_id, bias=False):
-        super(SAGELayer, self).__init__()
+    def __init__(self, in_features, out_features, layer_id, bias=True):
+        super(SAGE_Layer, self).__init__()
         self.layer_id = layer_id
         self.in_features = in_features
         self.out_features = out_features
@@ -94,13 +37,12 @@ class SAGELayer(nn.Module):
             self.register_parameter('bias', None)
             # Parameters与register_parameter都会向parameters写入参数，但是后者可以支持字符串命名
         # self.reset_parameters()
-
     # 初始化权重
     # def reset_parameters(self):
     #     stdv = 1. / math.sqrt(self.weight.size(1))
     #     # size()函数主要是用来统计矩阵元素个数，或矩阵某一维上的元素个数的函数  size（1）为行
     #     self.weight.data_raw.uniform_(-stdv, stdv)  # uniform() 方法将随机生成下一个实数，它在 [x, y] 范围内
-    #     if self.bias is not None:
+    #     ;if self.bias is not None:
     #         self.bias.data_raw.uniform_(-stdv, stdv)
 
     '''
@@ -110,33 +52,23 @@ class SAGELayer(nn.Module):
     support与adj进行torch.spmm操作，得到output，即AXW选择是否加bias
     '''
 
-    def forward(self, input, adj, nodes, epoch, weights, bias):
+    def forward(self, input, adj, nodes, epoch, weights, bias, autograd):
         # 权重需要从参数服务器中获取,先不做参数划分了，只弄一个server
         # 从参数服务器获取第0层的参数
         context.glContext.dgnnServerRouter[0].server_Barrier(self.layer_id)
-        self.bias=None
+
+        # max1=torch.max(input)
+        # min1=torch.min(input)
+        # print("max:{0},min{1}:".format(max1,min1))
         # 更新自身weights和bias
         self.weight.data = torch.FloatTensor(weights)
-        # self.bias.data = torch.FloatTensor(bias)
-
-        # if epoch!=100 and self.layer_id==0:
-        #     print('e{0}: l{1} weight_data:{2}'.format(epoch,self.layer_id,self.weight.data_raw[1][0]))
-        # if epoch==2000:
-        #     print('e{0}: l{1} weight_data:{2}'.format(epoch,self.layer_id,self.weight.data_raw))
-        # print('e{0} l{1} bias_data:{2}'.format(epoch,self.layer_id,self.bias.data_raw[0]))
+        self.bias.data = torch.FloatTensor(bias)
 
         # 将support设置到dgnnClient里,需要转成原index,slow
         emb_temp = input.detach().numpy()
         emb_dict = {}
         emb_nodes = np.array(nodes)
-        # emb_feat=np.array(emb_temp)
-        # for id in range(len(nodes)):
-        #     # emb_dict[nodes[id]] = emb_temp[id]
-        #     emb_nodes[id]=nodes[id]
-        #     emb_feat[id]=emb_temp[id]
 
-        # context.glContext.dgnnClient.worker_setEmbs(emb_dict)
-        # context.glContext.dgnnClient.embs=emb_dict
         start = time.time()
         set_embs(emb_nodes, emb_temp)
         end = time.time()
@@ -159,17 +91,31 @@ class SAGELayer(nn.Module):
             context.glContext.config['firstHopForWorkers'], epoch, self.layer_id, context.glContext.config['id'],
             context.glContext.oldToNewMap, context.glContext.config['worker_num'], len(nodes),
             context.glContext.config['ifCompress'], context.glContext.config['layerNum'],
-            context.glContext.config['bitNum'], context.glContext.config['isChangeRate'], store.isTrain,
-            context.glContext.config['trend'], feat_size)
+            int(context.glContext.config['bitNum']), context.glContext.config['isChangeRate'], store.isTrain,
+            context.glContext.config['trend'], feat_size,context.glContext.config['changeRateMode'])
+
+        end = time.time()
 
 
+        # 获取完之后，将嵌入进行合并，按照新顶点的顺序
+        # 这里其实是把一阶邻居的顶点的中间嵌入按照new id的顺序排列好
+        # needed_embs = [None] * (len(context.glContext.newToOldMap) - len(nodes))
+
+        start = time.time()
+
+
+
+        # 将needed_embs转化为tensor
 
         needed_embs = torch.FloatTensor(needed_embs)
+
 
         input = torch.cat((input, needed_embs), 0)
 
         end = time.time()
         # print("concat time :{0}".format(end - start))
+
+
 
         # torch.mm(a, b)是矩阵a和b矩阵相乘，torch.mul(a, b)是矩阵a和b对应位相乘，a和b的维度必须相等
         # 稀疏矩阵乘法
@@ -179,14 +125,7 @@ class SAGELayer(nn.Module):
         end = time.time()
         # print("aggregate time:{0}".format(end-start))
 
-        if self.layer_id == 0:
-            atg.A_X_H0 = aggregate
-        if self.layer_id == 1:
-            atg.A_X_H1 = aggregate
-        if self.layer_id == 2:
-            atg.A_X_H2 = aggregate
-        if self.layer_id == 3:
-            atg.A_X_H3 = aggregate
+        autograd.A_X_H[self.layer_id] = aggregate
         # 在每个顶点做完神经网络变换后，再进行传播
 
         start = time.time()
@@ -199,11 +138,10 @@ class SAGELayer(nn.Module):
         else:
             return output
 
+    # 通过设置断点，可以看出output的形式是0.01，0.01，0.01，0.01，0.01，#0.01，0.94]，
+    # 里面的值代表该x对应标签不同的概率，故此值可转换为#[0,0,0,0,0,0,1]，对应我们之前把标签onehot后的第七种标签
 
-# 通过设置断点，可以看出output的形式是0.01，0.01，0.01，0.01，0.01，#0.01，0.94]，
-# 里面的值代表该x对应标签不同的概率，故此值可转换为#[0,0,0,0,0,0,1]，对应我们之前把标签onehot后的第七种标签
-
-def __repr__(self):
-    return self.__class__.__name__ + ' (' \
-           + str(self.in_features) + ' -> ' \
-           + str(self.out_features) + ')'
+    def __repr__(self):
+        return self.__class__.__name__ + ' (' \
+               + str(self.in_features) + ' -> ' \
+               + str(self.out_features) + ')'

@@ -4,124 +4,101 @@ from context import context
 
 def parserInit():
     parser = argparse.ArgumentParser(description="Pytorch argument parser")
-    parser.add_argument('--role', type=str, help='machine role')
-    parser.add_argument('--id', type=int, help='the id of role')
-    parser.add_argument('--mode', type=str, help='mode')
-    parser.add_argument('--worker_num', type=int, help='the number of worker')
-    parser.add_argument('--server_num', type=int, help='the number of server')
-    parser.add_argument('--data_num', type=int, help='the number of data_raw')
-    parser.add_argument('--feature_dim', type=int, help='the dim size of feature')
-    parser.add_argument('--class_num', type=int, help='the number of data_raw')
+    parser.add_argument('--role_id', type=str, help='machine role and id')
+    parser.add_argument('--ifctx_mode', type=str, help='context from file or arguments delivering')
+    parser.add_argument('--worker_server_num', type=str, help='the number of worker and server')
+    parser.add_argument('--vtx_edge_feat_class_train_val_test', type=str, help='vtx_edge_feat_class_train_val_test')
+
     parser.add_argument('--hidden', type=str, help='hidden')
-    parser.add_argument('--ifCompress', type=str, help='ifCompress')
-    parser.add_argument('--ifCompensate', type=str, help='ifCompensate')
     parser.add_argument('--data_path', type=str, help='data_path')
 
-    parser.add_argument('--isNeededExactBackProp', type=str, help='isNeededExactBackProp')
-    parser.add_argument('--bucketNum', type=int, help='bucketNum')
-    parser.add_argument('--IterNum', type=int, help='IterNum')
-    parser.add_argument('--ifBackPropCompress', type=str, help='ifBackPropCompress')
-    parser.add_argument('--ifBackPropCompensate', type=str, help='ifBackPropCompensate')
+    parser.add_argument('--if_cprs_trend_backcprs_backcpst_changeBit', type=str, help='if_cprs_trend_backcprs_backcpst_changeBit')
 
-    parser.add_argument('--bucketNum_backProp', type=int, help='bucketNum_backProp')
-    parser.add_argument('--changeToIter', type=int, help='changeToIter')
-    parser.add_argument('--compensateMethod', type=str, help='compensateMethod')
-    parser.add_argument('--isChangeRate', type=str, help='isChangeRate')
-    parser.add_argument('--bitNum', type=int, help='bitNum')
-    parser.add_argument('--trend', type=int, help='trend')
-    parser.add_argument('--bitNum_backProp', type=int, help='bitNum_backProp')
-    parser.add_argument('--localCodeMode', type=str, help='localCodeMode')
+    parser.add_argument('--bit_backbit_trend', type=str, help='bit_backbit_trend')
 
-    parser.add_argument('--partitionMethod', type=str, help='partitionMethod')
-    parser.add_argument('--raw_data_path', type=str, help='raw_data_path')
-    parser.add_argument('--edge_num', type=int, help='edge_num')
-    parser.add_argument('--lr', type=float, help='learning rate')
-
-    parser.add_argument('--train_num', type=int, help='train_num')
-    parser.add_argument('--val_num', type=int, help='val_num')
-    parser.add_argument('--test_num', type=int, help='test_num')
+    parser.add_argument('--iter_lr_pttMethod', type=str, help='iter_lr_pttMethod')
 
     parser.add_argument('--servers', type=str, help='server ip')
     parser.add_argument('--workers', type=str, help='worker ip')
     parser.add_argument('--master', type=str, help='master ip')
 
     args = parser.parse_args()
-    if args.localCodeMode == 'true':
+    ifctx_mode=str.split(args.ifctx_mode,',')
+
+
+    if ifctx_mode[0] == 'true':
         context.Context.localCodeMode = True
     else:
         context.Context.localCodeMode = False
 
     if context.Context.localCodeMode:
         print("setting mode as code")
-        context.glContext.config['role'] = args.role
-        context.glContext.config['id'] = args.id
+        role_id=str.split(args.role_id,',')
+        context.glContext.config['role'] = role_id[0]
+        context.glContext.config['id']=int(role_id[1])
+
         context.glContext.config['mode'] = 'code'
         context.glContext.config['layerNum'] = len(context.glContext.config['hidden']) + 1
     else:
         print("setting mode as test")
-        context.glContext.config['role'] = args.role
-        context.glContext.config['id'] = args.id
-        context.glContext.config['mode'] = args.mode
+        role_id=str.split(args.role_id,',')
+        context.glContext.config['role'] = role_id[0]
+        context.glContext.config['id']=int(role_id[1])
+
+        context.glContext.config['mode'] = ifctx_mode[1]
         context.glContext.config['hidden'] = list(map(int, args.hidden.split(',')))
         context.glContext.config['layerNum'] = len(context.glContext.config['hidden']) + 1
-        context.glContext.config['worker_num'] = args.worker_num
-        context.glContext.config['server_num'] = args.server_num
-        context.glContext.config['data_num'] = args.data_num
-        context.glContext.config['feature_dim'] = args.feature_dim
-        context.glContext.config['class_num'] = args.class_num
 
-        context.glContext.config['ifCompensate'] = args.ifCompensate
+        worker_server_num=str.split(args.worker_server_num,',')
+        context.glContext.config['worker_num'] = int(worker_server_num[0])
+        context.glContext.config['server_num'] = int(worker_server_num[1])
 
-        context.glContext.config['isNeededExactBackProp'] = args.isNeededExactBackProp
-        context.glContext.config['bucketNum'] = args.bucketNum
-        context.glContext.config['IterNum'] = args.IterNum
-        context.glContext.config['ifBackPropCompress'] = args.ifBackPropCompress
-        context.glContext.config['ifBackPropCompensate'] = args.ifBackPropCompensate
+        vtx_edge_feat_class_train_val_test=str.split(args.vtx_edge_feat_class_train_val_test,',')
+        context.glContext.config['data_num'] = int(vtx_edge_feat_class_train_val_test[0])
+        context.glContext.config['edge_num']=int(vtx_edge_feat_class_train_val_test[1])
+        context.glContext.config['feature_dim'] = int(vtx_edge_feat_class_train_val_test[2])
+        context.glContext.config['class_num'] = int(vtx_edge_feat_class_train_val_test[3])
+        context.glContext.config['train_num'] = int(vtx_edge_feat_class_train_val_test[4])
+        context.glContext.config['val_num'] = int(vtx_edge_feat_class_train_val_test[5])
+        context.glContext.config['test_num'] = int(vtx_edge_feat_class_train_val_test[6])
 
-        context.glContext.config['bucketNum_backProp'] = args.bucketNum_backProp
-        context.glContext.config['changeToIter'] = args.changeToIter
-        context.glContext.config['compensateMethod'] = args.compensateMethod
-        context.glContext.config['data_path'] = args.data_path
-        context.glContext.config['bitNum'] = args.bitNum
-        context.glContext.config['trend'] = args.trend
-        context.glContext.config['bitNum_backProp'] = args.bitNum_backProp
-        context.glContext.config['raw_data_path'] = args.raw_data_path
-        context.glContext.config['edge_num'] = args.edge_num
-        context.glContext.config['partitionMethod'] = args.partitionMethod
-        context.glContext.config['lr'] = args.lr
-        context.glContext.config['train_num'] = args.train_num
-        context.glContext.config['val_num'] = args.val_num
-        context.glContext.config['test_num'] = args.test_num
-
-        if args.isChangeRate == 'false':
-            context.glContext.config['isChangeRate'] = False
-        else:
-            context.glContext.config['isChangeRate'] = True
-
-        if args.ifCompress == 'false':
+        if_array=str.split(args.if_cprs_trend_backcprs_backcpst_changeBit,',')
+        if if_array[0] == 'false':
             context.glContext.config['ifCompress'] = False
         elif args.ifCompress == 'true':
             context.glContext.config['ifCompress'] = True
 
-        if args.ifCompensate == 'false':
-            context.glContext.config['ifCompensate'] = False
-        elif args.ifCompensate == 'true':
-            context.glContext.config['ifCompensate'] = True
+        if if_array[1] == 'false':
+            context.glContext.config['isChangeRate'] = False
+        else:
+            context.glContext.config['isChangeRate'] = True
 
-        if args.isNeededExactBackProp == 'false':
-            context.glContext.config['isNeededExactBackProp'] = False
-        elif args.isNeededExactBackProp == 'true':
-            context.glContext.config['isNeededExactBackProp'] = True
-
-        if args.ifBackPropCompress == 'false':
+        if if_array[2] == 'false':
             context.glContext.config['ifBackPropCompress'] = False
         elif args.ifBackPropCompress == 'true':
             context.glContext.config['ifBackPropCompress'] = True
 
-        if args.ifBackPropCompensate == 'false':
+        if if_array[3] == 'false':
             context.glContext.config['ifBackPropCompensate'] = False
         elif args.ifBackPropCompensate == 'true':
             context.glContext.config['ifBackPropCompensate'] = True
+
+        if if_array[4] == 'false':
+            context.glContext.config['isChangeBitNum'] = False
+        elif args.ifBackPropCompensate == 'true':
+            context.glContext.config['isChangeBitNum'] = True
+
+        bit_backbit_trend=str.split(args.bit_backbit_trend,',')
+        context.glContext.config['bitNum'] = int(bit_backbit_trend[0])
+        context.glContext.config['bitNum_backProp'] = int(bit_backbit_trend[1])
+        context.glContext.config['trend'] = int(bit_backbit_trend[2])
+
+        context.glContext.config['data_path'] = args.data_path
+
+        iter_lr_pttMethod=str.split(args.iter_lr_pttMethod,',')
+        context.glContext.config['iterNum'] = int(iter_lr_pttMethod[0])
+        context.glContext.config['lr'] = float(iter_lr_pttMethod[1])
+        context.glContext.config['partitionMethod'] = iter_lr_pttMethod[2]
 
     context.glContext.ipInit(args.servers, args.workers, args.master)
     store.init()
@@ -131,17 +108,14 @@ def parserInit():
 
 
 def printContext():
-    print("role={0},id={1},mode={2},worker_num={3},data_num={4},isNeededExactBackProp={5},feature_dim={6},"
-          "class_num={7},hidden={8},ifCompress={9},ifCompensate={10},bucketNum={11},IterNum={12},ifBackPropCompress={13},"
-          "ifBackPropCompensate={14},bucketNum_backProp={15},changeToIter={16},compensateMethod={17}"
+    print("role={0},id={1},mode={2},worker_num={3},data_num={4},feature_dim={5},"
+          "class_num={6},hidden={7},ifCompress={8},iterNum={9},ifBackPropCompress={10},"
+          "ifBackPropCompensate={11}"
           .format(context.glContext.config['role'], context.glContext.config['id'], context.glContext.config['mode'],
                   context.glContext.config['worker_num'],
-                  context.glContext.config['data_num'], context.glContext.config['isNeededExactBackProp'],
+                  context.glContext.config['data_num'],
                   context.glContext.config['feature_dim'],
                   context.glContext.config['class_num'], context.glContext.config['hidden'],
                   context.glContext.config['ifCompress'],
-                  context.glContext.config['ifCompensate'], context.glContext.config['bucketNum'],
-                  context.glContext.config['IterNum'], context.glContext.config['ifBackPropCompress'],
-                  context.glContext.config['ifBackPropCompensate'],
-                  context.glContext.config['bucketNum_backProp'], context.glContext.config['changeToIter'],
-                  context.glContext.config['compensateMethod']))
+                  context.glContext.config['iterNum'], context.glContext.config['ifBackPropCompress'],
+                  context.glContext.config['ifBackPropCompensate']))

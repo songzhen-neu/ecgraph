@@ -18,8 +18,8 @@ class Context(object):
         'id': -1,
         'worker_address': worker_address,
         'master_address': None,
-        'server_num': 2,
-        'worker_num': 2,
+        'server_num': 3,
+        'worker_num': 3,
         'lr': 0.1,
 
         # 'data_path': '../../data/reddit-small',
@@ -80,35 +80,24 @@ class Context(object):
         # 'test_num':0,
 
         'master_id': 0,
-        # 'hidden': [16],
         'firstHopForWorkers': [],
-        'ifCompress': True,
-        'ifCompensate': False,
-        'isNeededExactBackProp': True,
+        'ifCompress': False,
         'ifMomentum': False,
         'layerNum': 2,
-        'bucketNum': 8,
         'bitNum': 1,  # 2,4,8,16bits分别对应桶数2,14,254,65534
-        'IterNum': 3000,
+        'iterNum': 3000,
         'trend':10,
         'firstProp': True,
         'ifBackPropCompress': False,
         'ifBackPropCompensate': False,
-        'bucketNum_backProp': 10,
         'bitNum_backProp': 4,
-        'changeToIter': 50,
-        'isGradientComensate': False,
-        'isHACompensate': False,
-        'isHCompensate': False,
-        'isAggCompensate': False,
-        'isChangeRate': True,
+        'isChangeRate': False,
         'isChangeBitNum':False,
         'changeRateMode':'select', # select or normal
         'partitionMethod': 'metis',  # hash,metis
         # accorMix 前k-1层 compensates by Layer, the last layer compensates by Iteration;
         # accorMix2 the first k-1 compensates by Iteration, the last layer pass the complete data_raw
         # accorMix3 前n轮Mix2，从第n+1轮开始按迭代轮
-        'compensateMethod': 'accorIter'  # accorIter,accorLayer,accorMix,accorMix2,accorMix3
     }
     global worker_id
     global dgnnServerRouter

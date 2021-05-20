@@ -18,58 +18,6 @@ import time
 
 
 
-def accessEmb(needed_emb_map_from_workers, i, epoch, layer_id):
-    if context.glContext.config['isChangeRate'] and store.isTrain:
-        # print("epoch:{0}".format(epoch))
-        needed_emb_map_from_workers[i] = \
-            context.glContext.dgnnWorkerRouter[i].worker_pull_emb_trend(
-                context.glContext.config['firstHopForWorkers'][i],
-                layer_id, epoch,
-                context.glContext.config['bucketNum'],
-                context.glContext.worker_id, i,
-                context.glContext.config['layerNum'],
-                context.glContext.config['trend'],
-                context.glContext.config['bitNum'])
-        if (epoch + 1) % context.glContext.config['trend'] == 0:
-            if not store.changeRate.__contains__(i):
-                store.changeRate[i] = {}
-                store.embs[i] = {}
-
-            store.changeRate[i][layer_id] = \
-                context.glContext.dgnnWorkerRouter[i].getChangeRate(i, layer_id)
-            store.embs[i][layer_id] = needed_emb_map_from_workers[i]
-
-        if int((epoch) / context.glContext.config['trend']) > 0 and (epoch + 1) % context.glContext.config[
-            'trend'] != 0:
-            round = (epoch + 1) % context.glContext.config['trend']
-            changeEmb = store.embs[i][layer_id] + round * store.changeRate[i][layer_id]
-            needed_emb_map_from_workers[i] = (needed_emb_map_from_workers[i] + changeEmb) / 2
-    else:
-        if context.glContext.config['ifCompress']:
-            needed_emb_map_from_workers[i] = \
-                context.glContext.dgnnWorkerRouter[i].worker_pull_emb_compress(
-                    context.glContext.config['firstHopForWorkers'][i],
-                    context.glContext.config['ifCompensate'], layer_id, epoch,
-                    context.glContext.config['compensateMethod'],
-                    context.glContext.config['bucketNum'],
-                    context.glContext.config['changeToIter'],
-                    context.glContext.worker_id,
-                    context.glContext.config['layerNum'],
-                    context.glContext.config['bitNum'])
-        else:
-            # needed_emb_map_from_workers[i] = \
-            #     context.glContext.dgnnWorkerRouter[i].worker_pull_needed_emb_compress_iter(
-            #     context.glContext.config['firstHopForWorkers'][i],
-            #     context.glContext.config['ifCompensate'],self.layer_id,epoch,
-            #     context.glContext.config['bucketNum']
-            # )
-            needed_emb_map_from_workers[i] = \
-                context.glContext.dgnnWorkerRouter[i].worker_pull_needed_emb(
-                    context.glContext.config['firstHopForWorkers'][i], epoch, layer_id, context.glContext.config['id'],
-                    i)
-    store.threadCountList[layer_id] += 1
-
-
 class GraphConvolution(nn.Module):
 
     # 初始化层：输入feature维度，输出feature维度，权重，偏移
@@ -117,30 +65,11 @@ class GraphConvolution(nn.Module):
         self.weight.data = torch.FloatTensor(weights)
         self.bias.data = torch.FloatTensor(bias)
 
-        # if epoch!=100 and self.layer_id==0:
-        #     print('e{0}: l{1} weight_data:{2}'.format(epoch,self.layer_id,self.weight.data_raw[1][0]))
-        # if epoch==2000:
-        #     print('e{0}: l{1} weight_data:{2}'.format(epoch,self.layer_id,self.weight.data_raw))
-        # print('e{0} l{1} bias_data:{2}'.format(epoch,self.layer_id,self.bias.data_raw[0]))
-
         # 将support设置到dgnnClient里,需要转成原index,slow
         emb_temp = input.detach().numpy()
-
-        # print(np.where(emb_temp>1,emb_temp,emb_temp))
-        # max1=np.max(emb_temp)
-        # min1=np.min(emb_temp)
-        # print("max:{0},min{1}:".format(max1,min1))
-
         emb_dict = {}
         emb_nodes = np.array(nodes)
-        # emb_feat=np.array(emb_temp)
-        # for id in range(len(nodes)):
-        #     # emb_dict[nodes[id]] = emb_temp[id]
-        #     emb_nodes[id]=nodes[id]
-        #     emb_feat[id]=emb_temp[id]
 
-        # context.glContext.dgnnClient.worker_setEmbs(emb_dict)
-        # context.glContext.dgnnClient.embs=emb_dict
         start = time.time()
         set_embs(emb_nodes, emb_temp)
         end = time.time()
@@ -166,9 +95,6 @@ class GraphConvolution(nn.Module):
             int(context.glContext.config['bitNum']), context.glContext.config['isChangeRate'], store.isTrain,
             context.glContext.config['trend'], feat_size,context.glContext.config['changeRateMode'])
 
-
-        # if epoch!=10000:
-        #     print("epoch {0},layer {1},max:{2},min:{3}".format(epoch,self.layer_id,np.max(needed_embs),np.min(needed_embs)))
         end = time.time()
 
 
@@ -178,67 +104,19 @@ class GraphConvolution(nn.Module):
 
         start = time.time()
 
-        # for循环遍历每个从远端获取的特征
-        # for wid in range(context.glContext.config['worker_num']):
-        #     if wid != context.glContext.worker_id:
-        #         for i, nid in enumerate(context.glContext.config['firstHopForWorkers'][wid]):
-        #             new_id = context.glContext.oldToNewMap[nid] - len(nodes)
-        #             needed_embs[new_id] = needed_emb_map_from_workers[wid][i]
 
-        # needed_embs = np.array(needed_embs)
-
-        if context.glContext.config['ifMomentum'] and epoch != 10000:
-            if epoch == 0:
-                mom.hLast[self.layer_id] = needed_embs
-            elif epoch == 1:
-                mom.mv1[self.layer_id] = needed_embs - mom.hLast[self.layer_id]
-                mom.hLast[self.layer_id] = needed_embs
-            else:
-                mom.mv2[self.layer_id] = needed_embs - mom.hLast[self.layer_id]
-                mom.hLast[self.layer_id] = needed_embs
-                mv1l = mom.mv1[self.layer_id]
-                mv2l = mom.mv2[self.layer_id]
-                mv_mul = mv1l * mv2l
-                mv = np.where(mv_mul > 0, mv_mul, 0)
-                needed_embs = needed_embs + 1000 * mv
-
-        # for id in range(len(context.glContext.newToOldMap)):
-        #     old_id=context.glContext.newToOldMap[id]
-        #     worker_id=old_id%context.glContext.config['worker_num']
-        #     emb_vec=[]
-        #     if worker_id != context.glContext.worker_id:
-        #         needed_embs[id-len(nodes)]=needed_emb_map_from_workers[worker_id]
 
         # 将needed_embs转化为tensor
 
         needed_embs = torch.FloatTensor(needed_embs)
-        # if self.layer_id==1:
-        #     if epoch ==0:
-        #         mom.hijlast=needed_embs[1][1]
-        #     else:
-        #         print(needed_embs[1][1]-mom.hijlast)
-        #         mom.hijlast=needed_embs[1][1]
 
-        # print("support size:")
-        # print(support.data_raw.shape)
-        # print("needed embs size:")
-        # print(needed_embs.shape)
 
         input = torch.cat((input, needed_embs), 0)
 
         end = time.time()
         # print("concat time :{0}".format(end - start))
 
-        if context.Context.config['isHCompensate'] and self.layer_id == 1:
-            if epoch == 0:
-                self.a.errorH1 = np.random.random(input.shape)
-                input = input - torch.FloatTensor(autograd.errorH1)
 
-
-            else:
-                input = input + torch.FloatTensor(autograd.errorH1)
-                autograd.errorH1 = np.random.random(input.shape)
-                input = input - torch.FloatTensor(autograd.errorH1)
 
         # torch.mm(a, b)是矩阵a和b矩阵相乘，torch.mul(a, b)是矩阵a和b对应位相乘，a和b的维度必须相等
         # 稀疏矩阵乘法
@@ -247,15 +125,6 @@ class GraphConvolution(nn.Module):
         aggregate = torch.mm(adj, input)
         end = time.time()
         # print("aggregate time:{0}".format(end-start))
-
-        if context.Context.config['isAggCompensate'] and self.layer_id == 1:
-            if epoch == 0:
-                autograd.errorAgg1 = np.random.random(aggregate.shape)
-                aggregate = aggregate - torch.FloatTensor(autograd.errorAgg1)
-            else:
-                aggregate = aggregate + torch.FloatTensor(autograd.errorAgg1)
-                autograd.errorAgg1 = np.random.random(aggregate.shape)
-                aggregate = aggregate - torch.FloatTensor(autograd.errorAgg1)
 
         autograd.A_X_H[self.layer_id] = aggregate
         # 在每个顶点做完神经网络变换后，再进行传播
