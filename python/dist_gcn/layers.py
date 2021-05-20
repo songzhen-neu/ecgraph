@@ -1,20 +1,14 @@
-import math
-
 import torch
 
 import torch.nn as nn
 
 from context import context
 import numpy as np
-import autograd.autograd as atg
+#import autograd.autograd as atg
 import context.momentum as mom
 import context.store as store
-from multiprocessing import Process, Queue
 # from cmake.build.example2 import *
 from cmake.build.example2 import *
-import _thread
-from threading import Lock
-import threading
 
 import time
 
@@ -101,7 +95,7 @@ class GraphConvolution(nn.Module):
     #     stdv = 1. / math.sqrt(self.weight.size(1))
     #     # size()函数主要是用来统计矩阵元素个数，或矩阵某一维上的元素个数的函数  size（1）为行
     #     self.weight.data_raw.uniform_(-stdv, stdv)  # uniform() 方法将随机生成下一个实数，它在 [x, y] 范围内
-    #     if self.bias is not None:
+    #     ;if self.bias is not None:
     #         self.bias.data_raw.uniform_(-stdv, stdv)
 
     '''
@@ -111,7 +105,7 @@ class GraphConvolution(nn.Module):
     support与adj进行torch.spmm操作，得到output，即AXW选择是否加bias
     '''
 
-    def forward(self, input, adj, nodes, epoch, weights, bias):
+    def forward(self, input, adj, nodes, epoch, weights, bias, autograd):
         # 权重需要从参数服务器中获取,先不做参数划分了，只弄一个server
         # 从参数服务器获取第0层的参数
         context.glContext.dgnnServerRouter[0].server_Barrier(self.layer_id)
@@ -237,14 +231,14 @@ class GraphConvolution(nn.Module):
 
         if context.Context.config['isHCompensate'] and self.layer_id == 1:
             if epoch == 0:
-                atg.errorH1 = np.random.random(input.shape)
-                input = input - torch.FloatTensor(atg.errorH1)
+                self.a.errorH1 = np.random.random(input.shape)
+                input = input - torch.FloatTensor(autograd.errorH1)
 
 
             else:
-                input = input + torch.FloatTensor(atg.errorH1)
-                atg.errorH1 = np.random.random(input.shape)
-                input = input - torch.FloatTensor(atg.errorH1)
+                input = input + torch.FloatTensor(autograd.errorH1)
+                autograd.errorH1 = np.random.random(input.shape)
+                input = input - torch.FloatTensor(autograd.errorH1)
 
         # torch.mm(a, b)是矩阵a和b矩阵相乘，torch.mul(a, b)是矩阵a和b对应位相乘，a和b的维度必须相等
         # 稀疏矩阵乘法
@@ -256,21 +250,14 @@ class GraphConvolution(nn.Module):
 
         if context.Context.config['isAggCompensate'] and self.layer_id == 1:
             if epoch == 0:
-                atg.errorAgg1 = np.random.random(aggregate.shape)
-                aggregate = aggregate - torch.FloatTensor(atg.errorAgg1)
+                autograd.errorAgg1 = np.random.random(aggregate.shape)
+                aggregate = aggregate - torch.FloatTensor(autograd.errorAgg1)
             else:
-                aggregate = aggregate + torch.FloatTensor(atg.errorAgg1)
-                atg.errorAgg1 = np.random.random(aggregate.shape)
-                aggregate = aggregate - torch.FloatTensor(atg.errorAgg1)
+                aggregate = aggregate + torch.FloatTensor(autograd.errorAgg1)
+                autograd.errorAgg1 = np.random.random(aggregate.shape)
+                aggregate = aggregate - torch.FloatTensor(autograd.errorAgg1)
 
-        if self.layer_id == 0:
-            atg.A_X_H0 = aggregate
-        if self.layer_id == 1:
-            atg.A_X_H1 = aggregate
-        if self.layer_id == 2:
-            atg.A_X_H2 = aggregate
-        if self.layer_id == 3:
-            atg.A_X_H3 = aggregate
+        autograd.A_X_H[self.layer_id] = aggregate
         # 在每个顶点做完神经网络变换后，再进行传播
 
         start = time.time()

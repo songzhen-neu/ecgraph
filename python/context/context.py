@@ -101,7 +101,7 @@ class Context(object):
         'isHACompensate': False,
         'isHCompensate': False,
         'isAggCompensate': False,
-        'isChangeRate': False,
+        'isChangeRate': True,
         'isChangeBitNum':False,
         'changeRateMode':'select', # select or normal
         'partitionMethod': 'metis',  # hash,metis
