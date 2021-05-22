@@ -65,7 +65,7 @@ def parserInit():
         if_array=str.split(args.if_cprs_trend_backcprs_backcpst_changeBit,',')
         if if_array[0] == 'false':
             context.glContext.config['ifCompress'] = False
-        elif args.ifCompress == 'true':
+        elif if_array[0] == 'true':
             context.glContext.config['ifCompress'] = True
 
         if if_array[1] == 'false':
@@ -75,17 +75,17 @@ def parserInit():
 
         if if_array[2] == 'false':
             context.glContext.config['ifBackPropCompress'] = False
-        elif args.ifBackPropCompress == 'true':
+        elif if_array[2] == 'true':
             context.glContext.config['ifBackPropCompress'] = True
 
         if if_array[3] == 'false':
             context.glContext.config['ifBackPropCompensate'] = False
-        elif args.ifBackPropCompensate == 'true':
+        elif if_array[3] == 'true':
             context.glContext.config['ifBackPropCompensate'] = True
 
         if if_array[4] == 'false':
             context.glContext.config['isChangeBitNum'] = False
-        elif args.ifBackPropCompensate == 'true':
+        elif if_array[4]  == 'true':
             context.glContext.config['isChangeBitNum'] = True
 
         bit_backbit_trend=str.split(args.bit_backbit_trend,',')

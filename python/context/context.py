@@ -18,12 +18,12 @@ class Context(object):
         'id': -1,
         'worker_address': worker_address,
         'master_address': None,
-        'server_num': 3,
-        'worker_num': 3,
+        'server_num': 1,
+        'worker_num': 1,
         'lr': 0.1,
 
-        # 'data_path': '../../data/reddit-small',
-        # 'raw_data_path': '../../data_raw/reddit-small',
+        # 'data_path': '/mnt/data/reddit-small',
+        # 'raw_data_path': '/mnt/data/reddit-small',
         # 'data_num': 232965,  # 231443
         # 'hidden': [64,64,64],
         # 'feature_dim': 602,
@@ -32,7 +32,6 @@ class Context(object):
         # 'train_num':153932,
         # 'val_num':23699,
         # 'test_num':55334,
-
 
         'data_path': '/mnt/data/cora/',
         'raw_data_path':'/mnt/data_raw/cora/',
@@ -56,8 +55,8 @@ class Context(object):
         # 'val_num':39323,
         # 'test_num':2213091,
 
-        # 'data_path': '../../data/pubmed',
-        # 'raw_data_path':'../../data_raw/pubmed',
+        # 'data_path': '/mnt/data/pubmed',
+        # 'raw_data_path':'/mnt/data/pubmed',
         # 'hidden': [16,16],
         # 'data_num': 19717,
         # 'feature_dim': 500,
