@@ -26,7 +26,7 @@ from cmake.build.example2 import *
 from context import context
 
 from dist_gcn.models import GCN
-#import autograd.autograd as atg
+# import autograd.autograd as atg
 import autograd.autograd_new as autoG
 from util_python import data_trans as dt
 
@@ -39,6 +39,27 @@ def printInfo(firstHopSetsForWorkers):
         if i != context.glContext.config['id']:
             print("worker {0}:{1}".format(i, len(firstHopSetsForWorkers[i])))
 
+
+def get_adjs_train(agg_node, adjs, nodes, ll):
+    edges = []
+    for i in agg_node:
+        for nei_id in adjs[i]:
+            edges.append([i, nei_id])
+
+    edges = np.array(edges)
+    adjs_train = sp.coo_matrix((np.ones(edges.shape[0]), (edges[:, 0], edges[:, 1])),
+                         shape=(ll, ll),
+                         dtype=np.int)
+
+    # print(adjs.T)
+
+    adjs_train = adjs_train + adjs_train.T.multiply(adjs_train.T > adjs_train) - adjs_train.multiply(adjs_train.T > adjs_train)
+    adjs_train = dt.normalize_gcn(adjs_train + sp.eye(adjs_train.shape[0]))  # eye创建单位矩阵，第一个参数为行数，第二个为列数
+    adjs_train = adjs_train[nodes]
+
+    adjs_train = dt.sparse_mx_to_torch_sparse_tensor(adjs_train)  # 邻接矩阵转为tensor处理
+
+    return adjs_train
 
 def run_gnn(dgnnClient, model):
     # 从远程获取顶点信息（主要是边缘顶点一阶邻居信息）后，在本地进行传播
@@ -56,7 +77,7 @@ def run_gnn(dgnnClient, model):
     idx_test = data['idx_test']
     id_old2new_map = data['id_old2new_map']
     id_new2old_map = data['id_new2old_map']
-    nodes = data['nodes'] # it just contains the local nodes
+    nodes = data['nodes']  # it just contains the local nodes
     train_ratio = data['train_ratio']
     test_ratio = data['test_ratio']
     val_ratio = data['val_ratio']
@@ -64,7 +85,8 @@ def run_gnn(dgnnClient, model):
     test_num = data['test_num']
     val_num = data['val_num']
 
-    #change add
+    # change add
+    adjs_train = get_adjs_train(agg_node[1], adjs, nodes,  len(id_old2new_map))
 
     edges = []
     # 从adj中解析出edge
@@ -72,7 +94,7 @@ def run_gnn(dgnnClient, model):
     #     for nei_id in adjs[i]:
     #         edges.append([i, nei_id])
     # Yu
-    for i in agg_node:
+    for i in agg_node[0]:
         for nei_id in adjs[i]:
             edges.append([i, nei_id])
 
@@ -91,9 +113,10 @@ def run_gnn(dgnnClient, model):
 
 
 
+
     printInfo(firstHopSetsForWorkers)
     ifCompress = context.glContext.config['ifCompress']
-    timeList=[]
+    timeList = []
     for epoch in range(context.glContext.config['iterNum']):
         startTimeTotle = time.time()
         model.train()
@@ -104,7 +127,7 @@ def run_gnn(dgnnClient, model):
         # slow
         start = time.time()
 
-        output = model(features, adjs, nodes_from_server, epoch) # change
+        output = model(features, adjs_train, nodes_from_server, epoch)  # change
         end = time.time()
         # print("output time:{0}".format(end - start))
 
@@ -122,8 +145,7 @@ def run_gnn(dgnnClient, model):
         loss_train.backward()  # 反向求导  Back Propagation
 
         # 需要准确的反向传播过程
-        autograd.back_prop_detail(dgnnClient,model,id_new2old_map, nodes, epoch, adjs)
-
+        autograd.back_prop_detail(dgnnClient, model, id_new2old_map, nodes, epoch, adjs_train)
 
         # 求出梯度后，发送到参数服务器中进行聚合，并更新参数值
         # a=model.gc1.weight.grad
@@ -133,9 +155,8 @@ def run_gnn(dgnnClient, model):
 
         laynum = context.glContext.config["layerNum"]
         for i in range(laynum):
-            weights_grad_map[i] = model.gc[i+1].weight.grad.detach().numpy().tolist()
-            bias_grad_map[i] = model.gc[i+1].bias.grad.detach().numpy().tolist()
-
+            weights_grad_map[i] = model.gc[i + 1].weight.grad.detach().numpy().tolist()
+            bias_grad_map[i] = model.gc[i + 1].bias.grad.detach().numpy().tolist()
 
         end_othertime = time.time()
         # print("other time:{0}".format(end_othertime - start_othertime))
@@ -172,8 +193,7 @@ def run_gnn(dgnnClient, model):
         # print("update model time:{0}".format(end - start))
         endTimeTotle = time.time()
 
-        timeList.append(endTimeTotle-startTimeTotle)
-
+        timeList.append(endTimeTotle - startTimeTotle)
 
         # optimizer.step()  # 更新所有的参数  Gradient Descent
         model.eval()
@@ -186,13 +206,13 @@ def run_gnn(dgnnClient, model):
             output = model(features, adjs, nodes_from_server, 10000)
             loss_val = F.nll_loss(output[idx_val], labels[idx_val])  # 验证集的损失函数
             # acc_val = metric.accuracy(output[idx_val], labels[idx_val])
-            acc_val=accuracy_score(labels[idx_val].detach().numpy(), output[idx_val].detach().numpy().argmax(axis=1))
+            acc_val = accuracy_score(labels[idx_val].detach().numpy(), output[idx_val].detach().numpy().argmax(axis=1))
             loss_train = F.nll_loss(output[idx_train], labels[idx_train])
-            acc_train = accuracy_score(labels[idx_train].detach().numpy(), output[idx_train].detach().numpy().argmax(axis=1))
+            acc_train = accuracy_score(labels[idx_train].detach().numpy(),
+                                       output[idx_train].detach().numpy().argmax(axis=1))
             # acc_train = metric.accuracy(output[idx_train], labels[idx_train])  # 计算准确率
             loss_test = F.nll_loss(output[idx_test], labels[idx_test])  # 验证集的损失函数
             acc_test = metric.accuracy(output[idx_test], labels[idx_test])
-
 
             val_f1 = f1_score(labels[idx_val].detach().numpy(), output[idx_val].detach().numpy().argmax(axis=1),
                               average='micro')
@@ -208,14 +228,13 @@ def run_gnn(dgnnClient, model):
                                                                             test_f1 * test_num)
 
             print('Epoch: {:04d}'.format(epoch + 1),
-                'acc_train_entire{:.4f}'.format(acc_entire['train'] / (float(train_datanum_entire))),
+                  'acc_train_entire{:.4f}'.format(acc_entire['train'] / (float(train_datanum_entire))),
                   'acc_val_entire:{:.4f}'.format(acc_entire['val'] / (float(val_datanum_entire))),
                   'acc_test_entire: {:.4f}'.format(acc_entire['test'] / (float(test_datanum_entire))),
                   'f1_val_entire:{:.4f}'.format(acc_entire['val_f1'] / (float(val_datanum_entire))),
                   'f1_test_entire: {:.4f}'.format(acc_entire['test_f1'] / (float(test_datanum_entire))),
                   "epoch_iter_time: {0}".format(endTimeTotle - startTimeTotle),
-                  "avg_iter_time: {0}".format(np.array(timeList).sum(axis=0)/len(timeList)))
-
+                  "avg_iter_time: {0}".format(np.array(timeList).sum(axis=0) / len(timeList)))
 
     # context.glContext.config['ifCompress'] = False
     # store.isTrain = False
@@ -262,8 +281,6 @@ if __name__ == "__main__":
         # print(dgnnMasterRouter.testString)
         # print(dgnnServerRouter[0].testString)
 
-
-
         context.glContext.dgnnMasterRouter.pullDataFromMasterGeneral(
             id, context.glContext.config['worker_num'],
             context.glContext.config['data_num'],
@@ -277,14 +294,13 @@ if __name__ == "__main__":
         # 输入：节点属性维度、隐藏层维度、标签维度
 
         autograd = autoG.AutoGrad()
-        activation = [F.relu, F.relu, F.relu, F.relu, F.relu, F.relu] # 第0个激活层没用到
+        activation = [F.relu, F.relu, F.relu, F.relu, F.relu, F.relu]  # 第0个激活层没用到
         autograd.set_activation(activation)
         # assign parameter
         model = GCN(nfeat=context.glContext.config['feature_dim'],
                     nhid=context.glContext.config['hidden'],
                     nclass=context.glContext.config['class_num'],
                     dropout=0.5, autograd=autograd)
-
 
         if context.glContext.config['id'] == 0:
             pu.assignParam()

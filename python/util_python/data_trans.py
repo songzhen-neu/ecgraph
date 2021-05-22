@@ -249,7 +249,7 @@ def load_datav2(dgnnClient):
     idx_test = rand_indices[train_num + val_num:train_num + val_num + test_num]
 
     feat_dim = context.glContext.config['feature_dim']
-    all_agg_node = all_agg_node_num(nodes_from_server,idx_train,idx_val,idx_test,adj_lists_from_server)
+    all_agg_node , all_agg_node_train, all_agg_node_val, all_agg_node_test = all_agg_node_num(nodes_from_server,idx_train,idx_val,idx_test,adj_lists_from_server)
 
     # 构建本地顶点的一阶邻居集合 change
     # firstHopSet = set()
@@ -321,9 +321,17 @@ def load_datav2(dgnnClient):
     # 将顶点按照id_old2new_map转化
     nodes = [id_old2new_map[i] for i in nodes_from_server]
     #d_sort_1=sorted(d,key=lambda x:(x[0],x[1]))#都是从小到大排列的
-    real_train_num = [nodes_from_server[i] for i in idx_train]
-    all_agg_node = sorted(all_agg_node, key=lambda x: (x not in real_train_num))
-    agg_node = [id_old2new_map[i] for i in all_agg_node]
+    #有必要吗？
+    all_agg_node  = sorted(all_agg_node)
+    all_agg_node_train = sorted(all_agg_node_train)
+    all_agg_node_val = sorted(all_agg_node_val)
+    all_agg_node_test = sorted(all_agg_node_test)
+
+    agg_node = {}
+    agg_node[0] = [id_old2new_map[i] for i in all_agg_node]
+    agg_node[1] = [id_old2new_map[i] for i in all_agg_node_train]
+    agg_node[2] = [id_old2new_map[i] for i in all_agg_node_val]
+    agg_node[3] = [id_old2new_map[i] for i in all_agg_node_test]
     # 将邻接表按照id_old2new_map转化
     # 将标签按照id_old2new_map转换
     adjs = []
@@ -454,4 +462,4 @@ def all_agg_node_num(nodes_from_server, idx_train, idx_val, idx_test, adj_lists_
             if neiborId in set_remote_test_node:
                 remote_hop_test_set.add(neiborSet)
     # 返回所有需要聚合的顶点
-    return remote_hop_train_set | set(real_train_num) | remote_hop_val_set | remote_hop_test_set
+    return remote_hop_train_set | set(real_train_num) | remote_hop_val_set | remote_hop_test_set, remote_hop_train_set | set(real_train_num),  set(real_val_num) | remote_hop_val_set, set(real_test_num) | remote_hop_test_set
