@@ -41,7 +41,7 @@ class Context(object):
         'class_num': 7,
         'edge_num':5278,
         'train_num':140, #140
-        'val_num':500,
+        'val_num':300,
         'test_num':1000,
 
         # 'data_path': '../../data/ogbn-products',
