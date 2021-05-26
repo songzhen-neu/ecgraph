@@ -35,7 +35,7 @@ class Context(object):
 
         'data_path': '/mnt/data/cora/',
         'raw_data_path':'/mnt/data_raw/cora/',
-        'hidden': [16,16],
+        'hidden': [16],
         'data_num': 2708,
         'feature_dim': 1433,
         'class_num': 7,

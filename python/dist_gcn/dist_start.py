@@ -65,8 +65,9 @@ def run_gnn(dgnnClient, model):
     # 从远程获取顶点信息（主要是边缘顶点一阶邻居信息）后，在本地进行传播
     # features, adjs, labels are based on the order of new id, and these only contains the local nodes
 
-    data = dt.load_datav2(dgnnClient)
-    agg_node = data['agg_node']
+    # data = dt.load_datav2(dgnnClient)
+    data=dt.load_data(dgnnClient)
+    # agg_node = data['agg_node']
     features = data['features']
     adjs = data['adjs']
     nodes_from_server = data['nodes_from_server']
@@ -86,17 +87,17 @@ def run_gnn(dgnnClient, model):
     val_num = data['val_num']
 
     # change add
-    adjs_train = get_adjs_train(agg_node[1], adjs, nodes,  len(id_old2new_map))
+    # adjs_train = get_adjs_train(agg_node[1], adjs, nodes,  len(id_old2new_map))
 
     edges = []
     # 从adj中解析出edge
-    # for i in range(len(adjs)):
-    #     for nei_id in adjs[i]:
-    #         edges.append([i, nei_id])
-    # Yu
-    for i in agg_node[0]:
+    for i in range(len(adjs)):
         for nei_id in adjs[i]:
             edges.append([i, nei_id])
+    # Yu
+    # for i in agg_node[0]:
+    #     for nei_id in adjs[i]:
+    #         edges.append([i, nei_id])
 
     edges = np.array(edges)
     adjs = sp.coo_matrix((np.ones(edges.shape[0]), (edges[:, 0], edges[:, 1])),
@@ -126,8 +127,8 @@ def run_gnn(dgnnClient, model):
 
         # slow
         start = time.time()
-
-        output = model(features, adjs_train, nodes_from_server, epoch)  # change
+        output = model(features, adjs, nodes_from_server, epoch)  # change
+        # output = model(features, adjs_train, nodes_from_server, epoch)  # change
         end = time.time()
         # print("output time:{0}".format(end - start))
 
@@ -145,8 +146,8 @@ def run_gnn(dgnnClient, model):
         loss_train.backward()  # 反向求导  Back Propagation
 
         # 需要准确的反向传播过程
-        autograd.back_prop_detail(dgnnClient, model, id_new2old_map, nodes, epoch, adjs_train)
-
+        # autograd.back_prop_detail(dgnnClient, model, id_new2old_map, nodes, epoch, adjs_train)
+        autograd.back_prop_detail(dgnnClient, model, id_new2old_map, nodes, epoch, adjs)
         # 求出梯度后，发送到参数服务器中进行聚合，并更新参数值
         # a=model.gc1.weight.grad
         # 将权重梯度和偏移梯度分别转化成map<int,vector<vector<float>>>和map<int,vector<float>>
