@@ -53,7 +53,7 @@ class GraphConvolution(nn.Module):
     support与adj进行torch.spmm操作，得到output，即AXW选择是否加bias
     '''
 
-    def forward(self, input, adj, nodes, epoch, weights, bias, autograd):
+    def forward(self, input, adj, nodes, epoch, weights, bias, autograd,graph):
         # 权重需要从参数服务器中获取,先不做参数划分了，只弄一个server
         # 从参数服务器获取第0层的参数
         context.glContext.dgnnServerRouter[0].server_Barrier(self.layer_id)
@@ -89,8 +89,8 @@ class GraphConvolution(nn.Module):
         feat_size = len(emb_temp[0])
 
         needed_embs = context.glContext.dgnnClientRouterForCpp.getNeededEmb(
-            context.glContext.config['firstHopForWorkers'], epoch, self.layer_id, context.glContext.config['id'],
-            context.glContext.oldToNewMap, context.glContext.config['worker_num'], len(nodes),
+            graph.fsthop_for_worker, epoch, self.layer_id, context.glContext.config['id'],
+            graph.id_old2new_dict, context.glContext.config['worker_num'], len(graph.agg_node_old),
             context.glContext.config['ifCompress'], context.glContext.config['layerNum'],
             int(context.glContext.config['bitNum']), context.glContext.config['isChangeRate'], store.isTrain,
             context.glContext.config['trend'], feat_size,context.glContext.config['changeRateMode'])

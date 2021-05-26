@@ -114,7 +114,7 @@ py::array_t<float> Router::getNeededEmb(vector<vector<int>> &nodes,
                 if (ifCompress && isTrain) {
                     pthread_create(&p, NULL, DGNNClient::worker_pull_emb_compress_parallel, (void *) metaData);
                 } else {
-                    pthread_create(&p, NULL, DGNNClient::worker_pull_needed_emb_parallel, (void *) metaData);
+                        pthread_create(&p, NULL, DGNNClient::worker_pull_needed_emb_parallel, (void *) metaData);
                 }
             }
 

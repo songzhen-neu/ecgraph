@@ -18,8 +18,8 @@ class Context(object):
         'id': -1,
         'worker_address': worker_address,
         'master_address': None,
-        'server_num': 1,
-        'worker_num': 1,
+        'server_num': 2,
+        'worker_num': 2,
         'lr': 0.1,
 
         # 'data_path': '/mnt/data/reddit-small',

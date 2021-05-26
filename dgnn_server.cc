@@ -246,11 +246,14 @@ Status ServiceImpl::workerPullEmb(
 
     auto *mutable_emb_reply = reply->mutable_resp_none_compress_emb_concat();
     mutable_emb_reply->Reserve(nodeNum * feat_size);
+//    cout<<"nodeNUm:"<<nodeNum<<"*"<<embs_ws.begin()->second.size()<<endl;
 
     for (int i = 0; i < nodeNum; i++) {
         int id = request->nodes(i);
+        if(embs_ws.count(id)==0){
+            cout<<"id"<<id<<endl;
+        }
         auto &emb_nodeid = embs_ws[id];
-
 
         mutable_emb_reply->Add(emb_nodeid.begin(), emb_nodeid.end());
 //        for (int j = 0; j < feat_size; j++) {
@@ -258,6 +261,7 @@ Status ServiceImpl::workerPullEmb(
 //
 //        }
     }
+
 
 
 //    for (int i = 0; i < nodeNum; i++) {

@@ -43,8 +43,8 @@ class AutoGrad(object):
     def set_activation(self, activation):
         self.activation = activation
 
-    def forward_detail_layer(self, model, x, adj, nodes, epoch, weight, bias, layer):
-        x = model.gc[layer](x, adj, nodes, epoch, weight[layer-1], bias[layer-1], self)
+    def forward_detail_layer(self, model, x, adj, nodes, epoch, weight, bias, layer,graph):
+        x = model.gc[layer](x, adj, nodes, epoch, weight[layer-1], bias[layer-1], self,graph)
         if layer == self.layer_num:
             self.Z[layer] = x
             return x
@@ -77,9 +77,9 @@ class AutoGrad(object):
         elif(act == None):
             return
 
-    def forward_detail(self, model, x, adj, nodes, epoch, weight, bias):
+    def forward_detail(self, model, x, adj, nodes, epoch, weight, bias,graph):
         for i in range(1, self.layer_num+1):
-            x = self.forward_detail_layer(model, x, adj, nodes, epoch, weight, bias, i)
+            x = self.forward_detail_layer(model, x, adj, nodes, epoch, weight, bias, i,graph)
 
         # 是否所有的层都要经过 x = F.normalize(x, p=2, dim=1)?
         # x = model.gc[self.layer_num](x, adj, nodes, epoch, weight[self.layer_num-1], bias[self.layer_num-1],self)

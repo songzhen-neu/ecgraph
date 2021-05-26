@@ -40,81 +40,52 @@ def printInfo(firstHopSetsForWorkers):
             print("worker {0}:{1}".format(i, len(firstHopSetsForWorkers[i])))
 
 
-def get_adjs_train(agg_node, adjs, nodes, ll):
+def get_sparse_adjs(graph):
     edges = []
-    for i in agg_node:
-        for nei_id in adjs[i]:
-            edges.append([i, nei_id])
-
-    edges = np.array(edges)
-    adjs_train = sp.coo_matrix((np.ones(edges.shape[0]), (edges[:, 0], edges[:, 1])),
-                         shape=(ll, ll),
-                         dtype=np.int)
-
-    # print(adjs.T)
-
-    adjs_train = adjs_train + adjs_train.T.multiply(adjs_train.T > adjs_train) - adjs_train.multiply(adjs_train.T > adjs_train)
-    adjs_train = dt.normalize_gcn(adjs_train + sp.eye(adjs_train.shape[0]))  # eye创建单位矩阵，第一个参数为行数，第二个为列数
-    adjs_train = adjs_train[nodes]
-
-    adjs_train = dt.sparse_mx_to_torch_sparse_tensor(adjs_train)  # 邻接矩阵转为tensor处理
-
-    return adjs_train
-
-def run_gnn(dgnnClient, model):
-    # 从远程获取顶点信息（主要是边缘顶点一阶邻居信息）后，在本地进行传播
-    # features, adjs, labels are based on the order of new id, and these only contains the local nodes
-
-    data = dt.load_datav2(dgnnClient)
-    agg_node = data['agg_node']
-    features = data['features']
-    adjs = data['adjs']
-    nodes_from_server = data['nodes_from_server']
-    firstHopSetsForWorkers = data['firstHopSetsForWorkers']
-    labels = data['labels']
-    idx_val = data['idx_val']
-    idx_train = data['idx_train']
-    idx_test = data['idx_test']
-    id_old2new_map = data['id_old2new_map']
-    id_new2old_map = data['id_new2old_map']
-    nodes = data['nodes']  # it just contains the local nodes
-    train_ratio = data['train_ratio']
-    test_ratio = data['test_ratio']
-    val_ratio = data['val_ratio']
-    train_num = data['train_num']
-    test_num = data['test_num']
-    val_num = data['val_num']
-
-    # change add
-    adjs_train = get_adjs_train(agg_node[1], adjs, nodes,  len(id_old2new_map))
-
-    edges = []
-    # 从adj中解析出edge
-    # for i in range(len(adjs)):
-    #     for nei_id in adjs[i]:
-    #         edges.append([i, nei_id])
-    # Yu
-    for i in agg_node[0]:
-        for nei_id in adjs[i]:
-            edges.append([i, nei_id])
+    for i in range(len(graph.adj)):
+        for nid in graph.adj[i]:
+            edges.append([i,nid])
 
     edges = np.array(edges)
     adjs = sp.coo_matrix((np.ones(edges.shape[0]), (edges[:, 0], edges[:, 1])),
-                         shape=(len(id_old2new_map), len(id_old2new_map)),
+                         shape=(len(graph.id_new2old_dict),len(graph.id_new2old_dict) ),
                          dtype=np.int)
 
     # print(adjs.T)
 
     adjs = adjs + adjs.T.multiply(adjs.T > adjs) - adjs.multiply(adjs.T > adjs)
     adjs = dt.normalize_gcn(adjs + sp.eye(adjs.shape[0]))  # eye创建单位矩阵，第一个参数为行数，第二个为列数
-    adjs = adjs[nodes]
+    adjs = adjs[range(len(graph.agg_node_old))]
 
     adjs = dt.sparse_mx_to_torch_sparse_tensor(adjs)  # 邻接矩阵转为tensor处理
 
+    return adjs
+
+def run_gnn(dgnnClient, model):
+    # 从远程获取顶点信息（主要是边缘顶点一阶邻居信息）后，在本地进行传播
+    # features, adjs, labels are based on the order of new id, and these only contains the local nodes
+
+    data = dt.load_datav2(dgnnClient)
+    idx_val = data['idx_val']
+    idx_train = data['idx_train']
+    idx_test = data['idx_test']
+    train_ratio = data['train_ratio']
+    test_ratio = data['test_ratio']
+    val_ratio = data['val_ratio']
+    train_num = data['train_num']
+    test_num = data['test_num']
+    val_num = data['val_num']
+    train_graph=data['train_graph']
+    full_graph=data['full_graph']
+
+    # change add
+    adjs_train = get_sparse_adjs(train_graph)
+    adjs_full=get_sparse_adjs(full_graph)
 
 
 
-    printInfo(firstHopSetsForWorkers)
+
+    printInfo(train_graph.fsthop_for_worker)
     ifCompress = context.glContext.config['ifCompress']
     timeList = []
     for epoch in range(context.glContext.config['iterNum']):
@@ -127,25 +98,25 @@ def run_gnn(dgnnClient, model):
         # slow
         start = time.time()
 
-        output = model(features, adjs_train, nodes_from_server, epoch)  # change
+        output = model(train_graph.feat_data, adjs_train, train_graph.agg_node_old, epoch,train_graph)  # change
         end = time.time()
         # print("output time:{0}".format(end - start))
 
         start_othertime = time.time()
         autograd.set_HZ(output, True, True, context.glContext.config["layerNum"])
 
-        loss_train = F.nll_loss(output[idx_train], labels[idx_train])
+        loss_train = F.nll_loss(output, train_graph.label)
         # 由于在算output时已经使用了log_softmax，这里使用的损失函数就是NLLloss，如果前面没有加log运算，
         # 这里就要使用CrossEntropyLoss了
         # 损失函数NLLLoss() 的输入是一个对数概率向量和一个目标标签. 它不会为我们计算对数概率，
         # 适合最后一层是log_softmax()的网络. 损失函数 CrossEntropyLoss() 与 NLLLoss() 类似,
         # 唯一的不同是它为我们去做 softmax.可以理解为：CrossEntropyLoss()=log_softmax() + NLLLoss()
         # https://blog.csdn.net/hao5335156/article/details/80607732
-        acc_train = metric.accuracy(output[idx_train], labels[idx_train])  # 计算准确率
+        acc_train = metric.accuracy(output, train_graph.label)  # 计算准确率
         loss_train.backward()  # 反向求导  Back Propagation
 
         # 需要准确的反向传播过程
-        autograd.back_prop_detail(dgnnClient, model, id_new2old_map, nodes, epoch, adjs_train)
+        autograd.back_prop_detail(dgnnClient, model, train_graph.id_new2old_dict, train_graph.agg_node_old, epoch, adjs_train)
 
         # 求出梯度后，发送到参数服务器中进行聚合，并更新参数值
         # a=model.gc1.weight.grad
@@ -203,21 +174,21 @@ def run_gnn(dgnnClient, model):
         if epoch % 5 == 0:
             context.glContext.config['ifCompress'] = False
             store.isTrain = False
-            output = model(features, adjs, nodes_from_server, 10000)
-            loss_val = F.nll_loss(output[idx_val], labels[idx_val])  # 验证集的损失函数
+            output = model(full_graph.feat_data, adjs_full, full_graph.agg_node_old, 10000,full_graph)
+            loss_val = F.nll_loss(output[idx_val], full_graph.label[idx_val])  # 验证集的损失函数
             # acc_val = metric.accuracy(output[idx_val], labels[idx_val])
-            acc_val = accuracy_score(labels[idx_val].detach().numpy(), output[idx_val].detach().numpy().argmax(axis=1))
-            loss_train = F.nll_loss(output[idx_train], labels[idx_train])
-            acc_train = accuracy_score(labels[idx_train].detach().numpy(),
+            acc_val = accuracy_score(full_graph.label[idx_val].detach().numpy(), output[idx_val].detach().numpy().argmax(axis=1))
+            loss_train = F.nll_loss(output[idx_train], full_graph.label[idx_train])
+            acc_train = accuracy_score(full_graph.label[idx_train].detach().numpy(),
                                        output[idx_train].detach().numpy().argmax(axis=1))
             # acc_train = metric.accuracy(output[idx_train], labels[idx_train])  # 计算准确率
-            loss_test = F.nll_loss(output[idx_test], labels[idx_test])  # 验证集的损失函数
-            acc_test = metric.accuracy(output[idx_test], labels[idx_test])
+            loss_test = F.nll_loss(output[idx_test], full_graph.label[idx_test])  # 验证集的损失函数
+            acc_test = metric.accuracy(output[idx_test], full_graph.label[idx_test])
 
-            val_f1 = f1_score(labels[idx_val].detach().numpy(), output[idx_val].detach().numpy().argmax(axis=1),
+            val_f1 = f1_score(full_graph.label[idx_val].detach().numpy(), output[idx_val].detach().numpy().argmax(axis=1),
                               average='micro')
 
-            test_f1 = f1_score(labels[idx_test].detach().numpy(), output[idx_test].detach().numpy().argmax(axis=1),
+            test_f1 = f1_score(full_graph.label[idx_test].detach().numpy(), output[idx_test].detach().numpy().argmax(axis=1),
                                average='micro')
 
             train_datanum_entire = int(train_ratio * context.glContext.config['data_num'])

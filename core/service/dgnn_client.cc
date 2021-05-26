@@ -1354,12 +1354,11 @@ void *DGNNClient::worker_pull_needed_emb_parallel(void *metaData_void) {
 
     Status status = dgnnClient->stub_->workerPullEmb(&context, request, &reply);
 
-
     if (status.ok()) {
-//        cout<<"resp_none_compress_emb_concat size:"<<reply.resp_none_compress_emb_concat().size()<<",mutable size:"<<
-//            reply.mutable_resp_none_compress_emb_concat()->size()<<endl;
+        cout<<"resp_none_compress_emb_concat size:"<<reply.resp_none_compress_emb_concat().size()<<",mutable size:"<<
+            reply.mutable_resp_none_compress_emb_concat()->size()<<endl;
+        cout<<nodeNum<<","<<feat_num<<endl;
         auto &embConcat = reply.resp_none_compress_emb_concat();
-
         for (int j = 0; j < nodeNum; j++) {
             int nid = nodes[j];
             int new_id = oldToNewMap[nid] - localNodeSize;
