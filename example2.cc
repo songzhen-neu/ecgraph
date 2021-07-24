@@ -23,7 +23,7 @@ int add(int i, int j) {
 
 
 // set_embs
-void set_embs(py::array_t<int>& ids,py::array_t<float>& embs){
+void set_embs(py::array_t<int>& ids,py::array_t<float>& embs,double embs_max,double embs_min){
     WorkerStore::embs.clear();
     py::buffer_info buf1=ids.request();
     py::buffer_info buf2=embs.request();
@@ -49,6 +49,9 @@ void set_embs(py::array_t<int>& ids,py::array_t<float>& embs){
         }
         WorkerStore::embs.insert(pair<int,vector<float>>(id,vec));
     }
+
+    WorkerStore::embs_max=embs_max;
+    WorkerStore::embs_min=embs_min;
 
 
 }

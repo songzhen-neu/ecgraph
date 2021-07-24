@@ -14,6 +14,7 @@ find_package(Protobuf CONFIG REQUIRED)
 
 message(STATUS "Using protobuf ${Protobuf_VERSION}")
 
+
 set(_PROTOBUF_LIBPROTOBUF protobuf::libprotobuf)
 set(_REFLECTION gRPC::grpc++_reflection)
 set(_GRPC_GRPCPP grpc++)

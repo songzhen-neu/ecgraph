@@ -1942,224 +1942,257 @@ void compressData_concat(int bitNum, vector<uint> &itemVector,
 //
 //}
 
+void compress1BitEmbs(const EmbMessage *request, EmbMessage *reply) {
+    // -1,1
+    auto &embs = WorkerStore::embs;
+    auto min_value = WorkerStore::embs_min;
+    auto max_value = WorkerStore::embs_max;
+    vector<Bucket> buckets;
+    Bucket b0{};
+    b0.bid = 0;
+    b0.lower_bound = (float) min_value;
+    b0.upper_bound = 0;
+    b0.value = -1;
+    buckets.push_back(b0);
+    reply->add_values(b0.value);
 
+    Bucket b1{};
+    b1.bid = 1;
+    b1.lower_bound = 0;
+    b1.upper_bound = (float) max_value;
+    b1.value = 1;
+    buckets.push_back(b1);
+    reply->add_values(b1.value);
+
+//    cout << "max_min_value:" << max_value << "," << min_value << endl;
+    reply->set_shapedim(embs.begin()->second.size());
+
+    int nodeNum = request->nodes_size();
+    reply->set_resp_node_size(nodeNum);
+    int bitNum = request->bitnum();
+    // 开始构建压缩后的张量
+    int oneIntDimNum = 32 / bitNum;
+    vector<uint> itemsVec(oneIntDimNum);
+    int feat_size = embs.begin()->second.size();
+
+
+    int left_num = feat_size % oneIntDimNum;
+    int compress_dim_size;
+    if (left_num == 0) {
+        compress_dim_size = feat_size / oneIntDimNum;
+    } else {
+        compress_dim_size = feat_size / oneIntDimNum + 1;
+    }
+    auto *mutable_emb_reply = reply->mutable_resp_compress_emb_concat();
+    mutable_emb_reply->Reserve(nodeNum * compress_dim_size);
+//        vector<uint> vec_emb(nodeNum*compress_dim_size);
+//        mutable_emb_reply->Add(vec_emb.begin(),vec_emb.end());
+
+//        auto& bitMap=WorkerStore::bucketPositionBitMap;
+    uint compressValue = 0;
+    for (int n = 0; n < nodeNum; n++) {
+        auto id = request->nodes(n);
+        uint bucket_id;
+        auto &emb_second = embs[id];
+        for (uint i = 0; i < feat_size; i++) {
+            float dim = emb_second[i];
+            if (dim >= 0) {
+                bucket_id = 1;
+            } else {
+                bucket_id = 0;
+            }
+            uint itemId = i % oneIntDimNum;
+            compressValue = compressValue | (bucket_id << (32 - (itemId + 1) * bitNum));
+
+            if (itemId == (oneIntDimNum - 1)) {
+                mutable_emb_reply->Add(compressValue);
+                compressValue = 0;
+            }
+
+        }
+        if (left_num != 0) {
+            mutable_emb_reply->Add(compressValue);
+            compressValue = 0;
+        }
+    }
+
+    reply->set_resp_featdim_size(compress_dim_size);
+}
+
+void compressBitsEmbs(const EmbMessage *request, EmbMessage *reply) {
+    auto &embs = WorkerStore::embs;
+    auto min_value = WorkerStore::embs_min;
+    auto max_value = WorkerStore::embs_max;
+    vector<Bucket> buckets;
+    bool ifCrossZero = false;
+    int bucket_num;
+    int bitNum = request->bitnum();
+    if (max_value > 0 && min_value < 0) {
+        ifCrossZero = true;
+    }
+    if (ifCrossZero) {
+        bucket_num = pow(2, bitNum) - 2;
+    } else {
+        bucket_num = pow(2, bitNum) - 1;
+    }
+//    cout << "max_min_value:" << max_value << "," << min_value << endl;
+    reply->set_shapedim(embs.begin()->second.size());
+
+    double interval = (max_value - min_value) / (double) (bucket_num);
+    int int_interval = (int) (interval * pow(10, 8));
+    int int_interval_addone = int_interval + 1;
+    interval = int_interval_addone / pow(10, 8);
+
+    if (ifCrossZero) {
+        // bucket_num是interval的个数，而不是真正的bucket number
+        int bucket_count = 0;
+        for (int i = 0; i < bucket_num; i++) {
+            // 从第0个区间开始，到bucket_num-1个区间结束,这里的i都是左编号
+            if (interval * i <= 0 && interval * (i + 1) >= 0) {
+                Bucket b_left{};
+                b_left.bid = bucket_count;
+                b_left.lower_bound = min_value + interval * i;
+                b_left.upper_bound = 0;
+                b_left.value = (b_left.lower_bound + b_left.upper_bound) / 2;
+                buckets.push_back(b_left);
+                reply->add_values(b_left.value);
+                bucket_count++;
+
+                Bucket b_right{};
+                b_right.bid = bucket_count;
+                b_right.lower_bound = 0;
+                b_right.upper_bound = min_value + interval * (i + 1);
+                b_right.value = (b_right.lower_bound + b_right.upper_bound) / 2;
+                buckets.push_back(b_right);
+                reply->add_values(b_right.value);
+                bucket_count++;
+            } else {
+                Bucket b{};
+                b.bid = bucket_count;
+                b.lower_bound = min_value + interval * i;
+                b.upper_bound = min_value + interval * (i + 1);
+                b.value = (b.lower_bound + b.upper_bound) / 2;
+                buckets.push_back(b);
+                reply->add_values(b.value);
+                bucket_count++;
+            }
+
+        }
+    } else {
+        for (int i = 0; i < bucket_num; i++) {
+            Bucket b;
+            b.bid = i;
+            b.lower_bound = min_value + interval * i;
+            b.upper_bound = min_value + interval * (i + 1);
+            b.value = (b.lower_bound + b.upper_bound) / 2;
+            buckets.push_back(b);
+            reply->add_values(b.value);
+        }
+    }
+
+    Bucket b;
+    b.bid = buckets.size();
+    b.lower_bound = 0;
+    b.upper_bound = 0;
+    b.value = 0;
+    buckets.push_back(b);
+    reply->add_values(0);
+
+    int bucketSize = buckets.size();
+    int nodeNum = request->nodes_size();
+    reply->set_resp_node_size(nodeNum);
+
+    // 开始构建压缩后的张量
+    int oneIntDimNum = 32 / bitNum;
+    vector<uint> itemsVec(oneIntDimNum);
+    int feat_size = embs.begin()->second.size();
+
+    int left_num = feat_size % oneIntDimNum;
+    int compress_dim_size;
+    if (left_num == 0) {
+        compress_dim_size = feat_size / oneIntDimNum;
+    } else {
+        compress_dim_size = feat_size / oneIntDimNum + 1;
+    }
+    auto *mutable_emb_reply = reply->mutable_resp_compress_emb_concat();
+    mutable_emb_reply->Reserve(nodeNum * compress_dim_size);
+//        vector<uint> vec_emb(nodeNum*compress_dim_size);
+//        mutable_emb_reply->Add(vec_emb.begin(),vec_emb.end());
+
+//        auto& bitMap=WorkerStore::bucketPositionBitMap;
+    uint compressValue = 0;
+    for (int n = 0; n < nodeNum; n++) {
+        auto id = request->nodes(n);
+        uint bucket_id;
+        auto &emb_second = embs[id];
+        for (uint i = 0; i < feat_size; i++) {
+            float dim = emb_second[i];
+            if (dim == 0) {
+                bucket_id = bucketSize - 1;
+            } else if (!ifCrossZero) {
+                bucket_id = (int) ((dim - min_value) / interval);
+            } else {
+                bucket_id = (int) ((dim - min_value) / interval);
+                if (dim > 0) {
+                    bucket_id += 1;
+                }
+            }
+            uint itemId = i % oneIntDimNum;
+
+            compressValue = compressValue | (bucket_id << (32 - (itemId + 1) * bitNum));
+//                compressValue=0;
+
+            if (itemId == (oneIntDimNum - 1)) {
+//                    compressData_concat(bitNum, itemsVec, mutable_emb_reply);
+                mutable_emb_reply->Add(compressValue);
+                compressValue = 0;
+            }
+
+        }
+//            cout<<endl;
+        if (left_num != 0) {
+            mutable_emb_reply->Add(compressValue);
+            compressValue = 0;
+        }
+    }
+
+    reply->set_resp_featdim_size(compress_dim_size);
+
+
+}
+
+void compressEmbs(const EmbMessage *request, EmbMessage *reply) {
+    // 开始对需要的嵌入进行压缩,先进行基于range的压缩，scaling factor
+    // 按照sketch压缩,但是这种实现方法需要一定时间，先试试量化这种吧
+    // 按照该模式进行压缩
+    // 压缩模式
+
+    int bitNum = request->bitnum();
+
+    // 1-bit compression is special, which cannot be divided into 3 parts when cross zero
+    if (bitNum == 1) {
+        compress1BitEmbs(request, reply);
+
+    } else {
+        // 如果bitnum不是1，那么至少有3个（实际4个）个桶，可以包含+-0
+        compressBitsEmbs(request, reply);
+    }
+
+    // 横跨，正负优先,0随后;
+    // if cross, -a,+b contains two ranges -a,0 0,+b
+    // if not cross
+
+}
 
 Status ServiceImpl::workerPullEmbCompress(ServerContext *context, const EmbMessage *request,
                                           EmbMessage *reply) {
 //    clock_t start_time_total = clock();
 
-    bool setBValueAslow = false;
-    enum CompressMethods {
-        rangeQ, oneBit
-    };
-    enum CompensateMethods {
-        accorLayer, accorIter, accorMix, accorMix2
-    };
-//    cout<<"begin1"<<endl;
-
-    // 开始对需要的嵌入进行压缩,先进行基于range的压缩，scaling factor
-    // 按照sketch压缩,但是这种实现方法需要一定时间，先试试量化这种吧
-    // 按照该模式进行压缩
-    // 压缩模式
-    int compM = rangeQ;
-
-    // 桶的个数
-    int bitNum = request->bitnum();
-    int bucket_num = pow(2, bitNum) - 2;
-    if (bitNum == 1) {
-        bucket_num = 1;
-    }
-    bool ifCompensate = request->ifcompensate();
-    int layerId = request->layerid();
-    int epoch = request->iterround();
-    int changeToIter = request->changetoiter();
-    int workerId = request->workerid();
-    int layerNum = request->layernum();
-    auto &embs = WorkerStore::embs;
-
-
-//    map<int, vector<float>> embs;
-    MinMaxS min_max;
-    double max_value = 1.0;
-    double min_value = 0;
-    // 去workerstore中获取一跳邻居嵌入
-
-//    min_max = cpst_non(*request, embs, layerId);
-
-
-
-//    min_value = min_max.min_value;
-//    max_value = min_max.max_value;
-
-
-//    if(layerId==1){
-//        cout<<"min,max:"<<min_value<<","<<max_value<<endl;
-//    }
-
-
-//    cout<<"min_value,max_value:"<<min_value<<","<<max_value<<endl;
-    reply->set_shapedim(embs.begin()->second.size());
-//    cout << "set shape_dim as:" << reply->shapedim() << endl;
     struct timeval t1, t2;
     double timeuse;
     gettimeofday(&t1, NULL);
 
-    if (compM == CompressMethods::rangeQ) {
-        vector<Bucket> buckets;
-        double interval = (max_value - min_value) / (double) (bucket_num);
-//        cout<<"max,min:"<<max_value<<","<<min_value<<endl;
-//        cout<<"bucket_num,interval_bucket:"<<bucket_num<<","<<interval<<endl;
-        int int_interval = (int) (interval * pow(10, 8));
-        int int_interval_addone = int_interval + 1;
-//        cout<<"int_interval,add1:"<<int_interval<<","<<int_interval_addone<<endl;
-        interval = int_interval_addone / pow(10, 8);
-//        cout<<"interval:"<<interval<<endl;
-
-
-//        clock_t start_compress = clock();
-        if (min_value < 0 && max_value > 0) {
-            for (int i = 0; i < bucket_num + 1; i++) {
-                if (min_value + interval * i < 0 && min_value + interval * (i + 1) > 0) {
-                    // 建两个桶,以0的分界线
-                    Bucket b1;
-                    b1.bid = i;
-                    b1.lower_bound = min_value + interval * i;
-                    b1.upper_bound = 0;
-
-                    b1.value = (b1.lower_bound + b1.upper_bound) / 2;
-
-                    buckets.push_back(b1);
-                    reply->add_values(b1.value);
-
-                    i = i + 1;
-                    Bucket b2;
-                    b2.bid = i;
-                    b2.lower_bound = 0;
-                    b2.upper_bound = min_value + interval * (i + 1);
-                    if (i == bucket_num) {
-                        b2.upper_bound = max_value;
-                    }
-
-                    b2.value = (b2.lower_bound + b2.upper_bound) / 2;
-
-
-                    buckets.push_back(b2);
-                    reply->add_values(b2.value);
-                } else {
-                    Bucket b;
-                    b.bid = i;
-                    b.lower_bound = min_value + interval * i;
-                    b.upper_bound = min_value + interval * (i + 1);
-                    if (i == bucket_num - 1) {
-                        b.upper_bound = max_value;
-                    }
-                    if (b.lower_bound < 0 && setBValueAslow) {
-                        b.value = b.upper_bound;
-                    } else if (b.lower_bound > 0 && setBValueAslow) {
-                        b.value = b.lower_bound;
-                    } else {
-                        b.value = (b.lower_bound + b.upper_bound) / 2;
-                    }
-
-                    buckets.push_back(b);
-                    reply->add_values(b.value);
-                }
-            }
-        } else {
-            for (int i = 0; i < bucket_num; i++) {
-                Bucket b;
-                b.bid = i;
-                b.lower_bound = min_value + interval * i;
-                b.upper_bound = min_value + interval * (i + 1);
-                if (i == bucket_num - 1) {
-                    b.upper_bound = max_value;
-                }
-
-                if (b.lower_bound < 0 && setBValueAslow) {
-                    b.value = b.upper_bound;
-                } else if (b.lower_bound > 0 && setBValueAslow) {
-                    b.value = b.lower_bound;
-                } else {
-                    b.value = (b.lower_bound + b.upper_bound) / 2;
-                }
-                buckets.push_back(b);
-                reply->add_values(b.value);
-            }
-        }
-
-        Bucket b;
-        b.bid = buckets.size();
-        b.lower_bound = 0;
-        b.upper_bound = 0;
-        b.value = 0;
-        buckets.push_back(b);
-        reply->add_values(0);
-
-
-        int bucketSize = buckets.size();
-
-        int nodeNum = request->nodes_size();
-        reply->set_resp_node_size(nodeNum);
-        // 开始构建压缩后的张量
-        int oneIntDimNum = 32 / bitNum;
-        vector<uint> itemsVec(oneIntDimNum);
-        int feat_size = embs.begin()->second.size();
-
-        int left_num = feat_size % oneIntDimNum;
-        int compress_dim_size;
-        if (left_num == 0) {
-            compress_dim_size = feat_size / oneIntDimNum;
-        } else {
-            compress_dim_size = feat_size / oneIntDimNum + 1;
-        }
-        auto *mutable_emb_reply = reply->mutable_resp_compress_emb_concat();
-        mutable_emb_reply->Reserve(nodeNum * compress_dim_size);
-//        vector<uint> vec_emb(nodeNum*compress_dim_size);
-//        mutable_emb_reply->Add(vec_emb.begin(),vec_emb.end());
-
-//        auto& bitMap=WorkerStore::bucketPositionBitMap;
-        uint compressValue = 0;
-        for (int n = 0; n < nodeNum; n++) {
-            auto id = request->nodes(n);
-            uint bucket_id;
-            auto &emb_second = embs[id];
-
-            for (uint i = 0; i < feat_size; i++) {
-                float dim = emb_second[i];
-                if (dim == 0) {
-                    bucket_id = bucketSize - 1;
-                } else {
-                    bucket_id = (int) (dim / interval);
-                }
-                uint itemId = i % oneIntDimNum;
-
-//                if(dim>1){
-//                    cout<<bucket_id<<endl;
-//                    cout<<dim<<","<<buckets[bucket_id].value<<endl;
-//                }
-//                cout<<dim<<" ";
-
-//                compressValue=compressValue|bitMap[bucket_id][itemId];
-                compressValue = compressValue | (bucket_id << (32 - (itemId + 1) * bitNum));
-//                compressValue=0;
-
-                if (itemId == (oneIntDimNum - 1)) {
-//                    compressData_concat(bitNum, itemsVec, mutable_emb_reply);
-                    mutable_emb_reply->Add(compressValue);
-                    compressValue = 0;
-                }
-
-            }
-//            cout<<endl;
-            if (left_num != 0) {
-                mutable_emb_reply->Add(compressValue);
-                compressValue = 0;
-            }
-        }
-
-        reply->set_resp_featdim_size(compress_dim_size);
-    }
-
+    compressEmbs(request, reply);
 
     gettimeofday(&t2, NULL);
     timeuse = t2.tv_sec - t1.tv_sec + (t2.tv_usec - t1.tv_usec) / 1000000.0;
@@ -2911,15 +2944,393 @@ Status ServiceImpl::sendAccuracy(ServerContext *context, const AccuracyMessage *
 
 int getIndexWithMinError(float v0, float v1, float v2) {
 
-    if (v1 <= v0  && v1 <= v2) {
+    if (v1 <= v0 && v1 <= v2) {
         return 1;
-    } else if (v2 <= v0  && v2 <= v1) {
+    } else if (v2 <= v0 && v2 <= v1) {
         return 2;
     } else {
         return 0;
     }
     // @test 1
 //    return 2;
+}
+
+void compress1BitEmbsTrend(const EmbMessage *request, EmbMessage *reply, map<int, vector<float>> &embs) {
+    vector<Bucket> buckets;
+    auto min_value = WorkerStore::embs_min;
+    auto max_value = WorkerStore::embs_max;
+    int bitNum = request->bitnum();
+    int workerId = request->workerid();
+    int layerId = request->layerid();
+    int epoch = request->epoch();
+    int trend = request->trend();
+
+
+    Bucket b0{};
+    b0.bid = 0;
+    b0.lower_bound = (float) min_value;
+    b0.upper_bound = 0;
+    b0.value = -1;
+    buckets.push_back(b0);
+    reply->add_values(b0.value);
+
+    Bucket b1{};
+    b1.bid = 1;
+    b1.lower_bound = 0;
+    b1.upper_bound = (float) max_value;
+    b1.value = 1;
+    buckets.push_back(b1);
+    reply->add_values(b1.value);
+
+//    cout << "max_min_value:" << max_value << "," << min_value << endl;
+    reply->set_shapedim(embs.begin()->second.size());
+    int feat_size = embs.begin()->second.size();
+    int nodeNum = request->nodes_size();
+    reply->set_resp_node_size(nodeNum);
+
+    int oneIntDimNum = 32 / bitNum;
+    vector<uint> itemsVec(oneIntDimNum);
+    int left_num = feat_size % oneIntDimNum;
+    int compress_dim_size;
+    if (left_num == 0) {
+        compress_dim_size = feat_size / oneIntDimNum;
+    } else {
+        compress_dim_size = feat_size / oneIntDimNum + 1;
+    }
+    auto *mutable_emb_reply = reply->mutable_resp_compress_emb_concat();
+    mutable_emb_reply->Reserve(nodeNum * compress_dim_size);
+
+    int node_left_num = nodeNum % 16;
+    int compress_node_size;
+    if (node_left_num == 0) {
+        compress_node_size = nodeNum / 16;
+    } else {
+        compress_node_size = nodeNum / 16 + 1;
+    }
+    auto *mutable_value_flag_reply = reply->mutable_value_select_flags();
+    mutable_value_flag_reply->Reserve(compress_node_size);
+
+    uint compressValue = 0;
+    uint compressNode = 0;
+
+    vector<float> count_flag_num(3);
+
+    auto last_embs = WorkerStore::embs_last[workerId][layerId];
+    auto rates = WorkerStore::embs_change_rate[workerId][layerId];
+    reply->mutable_value_select_flags()->Reserve(nodeNum);
+
+    for (int n = 0; n < nodeNum; n++) {
+        auto id = request->nodes(n);
+        uint bucket_id;
+        // the non-error embs
+        auto &emb_second = embs[id];
+        auto last_embs_node = last_embs[id];
+        auto rates_node = rates[id];
+        float comp_error = 0;
+        float pred_error = 0;
+        float mix_error = 0;
+
+        vector<uint> vec_feat_comp_tmp(compress_dim_size);
+
+        for (uint i = 0; i < feat_size; i++) {
+            float dim = emb_second[i];
+            if (dim >= 0) {
+                bucket_id = 1;
+            } else {
+                bucket_id = 0;
+            }
+            uint itemId = i % oneIntDimNum;
+            // compare the values of compress, predict and (c+p)/2
+            float compDim = buckets[bucket_id].value;
+            float predDim = 0;
+            if (epoch / trend == 0) {
+                // predictive value is the last embs
+                predDim = last_embs_node[i];
+            } else {
+                int round = (epoch + 1) % trend;
+                predDim = round * rates_node[i] + last_embs_node[i];
+            }
+            float mixDim = (predDim + compDim) / 2;
+
+
+            comp_error += abs(compDim - dim);
+            pred_error += abs(predDim - dim);
+            mix_error += abs(mixDim - dim);
+
+            // @test 3
+//                    comp[i] = compDim;
+//                    pred[i] = predDim;
+//                    mix[i] = mixDim;
+
+            compressValue = compressValue | (bucket_id << (32 - (itemId + 1) * bitNum));
+
+            if (itemId == (oneIntDimNum - 1)) {
+                vec_feat_comp_tmp[i / oneIntDimNum] = compressValue;
+                compressValue = 0;
+            }
+
+        }
+
+
+        if (left_num != 0) {
+            vec_feat_comp_tmp[feat_size / oneIntDimNum] = compressValue;
+            compressValue = 0;
+        }
+
+        uint index_WithMinError = getIndexWithMinError(comp_error, pred_error, mix_error);
+
+
+        count_flag_num[index_WithMinError]++;
+
+
+        if (index_WithMinError != 1) {
+            // predictive value does not need to be sent,others need to be sent the value of compression
+            mutable_emb_reply->Add(vec_feat_comp_tmp.begin(), vec_feat_comp_tmp.end());
+
+        }
+
+        uint itemId_node = n % 16;
+        compressNode = compressNode | (index_WithMinError << (32 - (itemId_node + 1) * 2));
+        if (itemId_node == (16 - 1)) {
+            mutable_value_flag_reply->Add(compressNode);
+            compressNode = 0;
+        }
+
+    }
+
+    if (node_left_num != 0) {
+        mutable_value_flag_reply->Add(compressNode);
+        compressNode = 0;
+    }
+
+
+    reply->set_resp_featdim_size(compress_dim_size);
+    if (layerId == 0) {
+        reply->set_comp_data_percent(0);
+    } else {
+        reply->set_comp_data_percent((float) (count_flag_num[0] + count_flag_num[2]) / (float) nodeNum);
+    }
+
+
+//    reply->set_shapedim(embs.begin()->second.size());
+
+}
+
+void compressBitsEmbsTrend(const EmbMessage *request, EmbMessage *reply, map<int, vector<float>> &embs) {
+    // 发送压缩嵌入
+    vector<Bucket> buckets;
+    auto min_value = WorkerStore::embs_min;
+    auto max_value = WorkerStore::embs_max;
+    int bitNum = request->bitnum();
+    int workerId = request->workerid();
+    int layerId = request->layerid();
+    int epoch = request->epoch();
+    int trend = request->trend();
+
+    bool ifCrossZero = false;
+    int bucket_num;
+    int feat_size=embs.begin()->second.size();
+    if (max_value > 0 && min_value < 0) {
+        ifCrossZero = true;
+    }
+    if (ifCrossZero) {
+        bucket_num = pow(2, bitNum) - 2;
+    } else {
+        bucket_num = pow(2, bitNum) - 1;
+    }
+    reply->set_shapedim(embs.begin()->second.size());
+
+    double interval = (max_value - min_value) / (double) (bucket_num);
+    uint int_interval = (int) (interval * pow(10, 8));
+    uint int_interval_addone = int_interval + 1;
+    interval = int_interval_addone / pow(10, 8);
+
+    if (ifCrossZero) {
+        // bucket_num是interval的个数，而不是真正的bucket number
+        int bucket_count = 0;
+        for (int i = 0; i < bucket_num; i++) {
+            // 从第0个区间开始，到bucket_num-1个区间结束,这里的i都是左编号
+            if (interval * i <= 0 && interval * (i + 1) >= 0) {
+                Bucket b_left{};
+                b_left.bid = bucket_count;
+                b_left.lower_bound = min_value + interval * i;
+                b_left.upper_bound = 0;
+                b_left.value = (b_left.lower_bound + b_left.upper_bound) / 2;
+                buckets.push_back(b_left);
+                reply->add_values(b_left.value);
+                bucket_count++;
+
+                Bucket b_right{};
+                b_right.bid = bucket_count;
+                b_right.lower_bound = 0;
+                b_right.upper_bound = min_value + interval * (i + 1);
+                b_right.value = (b_right.lower_bound + b_right.upper_bound) / 2;
+                buckets.push_back(b_right);
+                reply->add_values(b_right.value);
+                bucket_count++;
+            } else {
+                Bucket b{};
+                b.bid = bucket_count;
+                b.lower_bound = min_value + interval * i;
+                b.upper_bound = min_value + interval * (i + 1);
+                b.value = (b.lower_bound + b.upper_bound) / 2;
+                buckets.push_back(b);
+                reply->add_values(b.value);
+                bucket_count++;
+            }
+
+        }
+    } else {
+        for (int i = 0; i < bucket_num; i++) {
+            Bucket b;
+            b.bid = i;
+            b.lower_bound = min_value + interval * i;
+            b.upper_bound = min_value + interval * (i + 1);
+            b.value = (b.lower_bound + b.upper_bound) / 2;
+            buckets.push_back(b);
+            reply->add_values(b.value);
+        }
+    }
+
+    Bucket b;
+    b.bid = buckets.size();
+    b.lower_bound = 0;
+    b.upper_bound = 0;
+    b.value = 0;
+    buckets.push_back(b);
+    reply->add_values(0);
+
+
+    int bucketSize = buckets.size();
+    int nodeNum = request->nodes_size();
+    reply->set_resp_node_size(nodeNum);
+    int oneIntDimNum = 32 / bitNum;
+    vector<uint> itemsVec(oneIntDimNum);
+    int left_num = feat_size % oneIntDimNum;
+    int compress_dim_size;
+    if (left_num == 0) {
+        compress_dim_size = feat_size / oneIntDimNum;
+    } else {
+        compress_dim_size = feat_size / oneIntDimNum + 1;
+    }
+    auto *mutable_emb_reply = reply->mutable_resp_compress_emb_concat();
+    mutable_emb_reply->Reserve(nodeNum * compress_dim_size);
+
+    int node_left_num = nodeNum % 16;
+    int compress_node_size;
+    if (node_left_num == 0) {
+        compress_node_size = nodeNum / 16;
+    } else {
+        compress_node_size = nodeNum / 16 + 1;
+    }
+    auto *mutable_value_flag_reply = reply->mutable_value_select_flags();
+    mutable_value_flag_reply->Reserve(compress_node_size);
+
+    uint compressValue = 0;
+    uint compressNode = 0;
+
+    vector<float> count_flag_num(3);
+
+    auto last_embs = WorkerStore::embs_last[workerId][layerId];
+    auto rates = WorkerStore::embs_change_rate[workerId][layerId];
+    reply->mutable_value_select_flags()->Reserve(nodeNum);
+
+    for (int n = 0; n < nodeNum; n++) {
+        auto id = request->nodes(n);
+        uint bucket_id;
+        // the non-error embs
+        auto &emb_second = embs[id];
+        auto last_embs_node = last_embs[id];
+        auto rates_node = rates[id];
+        float comp_error = 0;
+        float pred_error = 0;
+        float mix_error = 0;
+
+
+        vector<uint> vec_feat_comp_tmp(compress_dim_size);
+
+
+        for (uint i = 0; i < feat_size; i++) {
+            float dim = emb_second[i];
+            if (dim == 0) {
+                bucket_id = bucketSize - 1;
+            } else if (!ifCrossZero) {
+                bucket_id = (int) ((dim - min_value) / interval);
+            } else {
+                bucket_id = (int) ((dim - min_value) / interval);
+                if (dim > 0) {
+                    bucket_id += 1;
+                }
+            }
+
+            uint itemId = i % oneIntDimNum;
+            // compare the values of compress, predict and (c+p)/2
+            float compDim = buckets[bucket_id].value;
+            float predDim = 0;
+            if (epoch / trend == 0) {
+                // predictive value is the last embs
+                predDim = last_embs_node[i];
+            } else {
+                int round = (epoch + 1) % trend;
+                predDim = round * rates_node[i] + last_embs_node[i];
+            }
+            float mixDim = (predDim + compDim) / 2;
+
+
+            comp_error += abs(compDim - dim);
+            pred_error += abs(predDim - dim);
+            mix_error += abs(mixDim - dim);
+
+
+            compressValue = compressValue | (bucket_id << (32 - (itemId + 1) * bitNum));
+
+            if (itemId == (oneIntDimNum - 1)) {
+                vec_feat_comp_tmp[i / oneIntDimNum] = compressValue;
+                compressValue = 0;
+            }
+
+        }
+
+
+        if (left_num != 0) {
+            vec_feat_comp_tmp[feat_size / oneIntDimNum] = compressValue;
+            compressValue = 0;
+        }
+
+        uint index_WithMinError = getIndexWithMinError(comp_error, pred_error, mix_error);
+
+
+        count_flag_num[index_WithMinError]++;
+
+
+        if (index_WithMinError != 1) {
+            // predictive value does not need to be sent,others need to be sent the value of compression
+            mutable_emb_reply->Add(vec_feat_comp_tmp.begin(), vec_feat_comp_tmp.end());
+
+        }
+
+        uint itemId_node = n % 16;
+        compressNode = compressNode | (index_WithMinError << (32 - (itemId_node + 1) * 2));
+        if (itemId_node == (16 - 1)) {
+//                    compressData_concat(bitNum, itemsVec, mutable_emb_reply);
+            mutable_value_flag_reply->Add(compressNode);
+            compressNode = 0;
+        }
+
+    }
+
+    if (node_left_num != 0) {
+        mutable_value_flag_reply->Add(compressNode);
+        compressNode = 0;
+    }
+
+
+    reply->set_resp_featdim_size(compress_dim_size);
+    if (layerId == 0) {
+        reply->set_comp_data_percent(0);
+    } else {
+        reply->set_comp_data_percent((float) (count_flag_num[0] + count_flag_num[2]) / (float) nodeNum);
+    }
 }
 
 Status ServiceImpl::workerPullEmbTrendSelect(
@@ -2935,17 +3346,9 @@ Status ServiceImpl::workerPullEmbTrendSelect(
 
     int feat_size = WorkerStore::embs.begin()->second.size();
     auto &embs = WorkerStore::embs;
-    float max_value = 1.0;
-    float min_value = 0.0;
-    int bitNum = request->bitnum();
-    int bucket_num = pow(2, bitNum) - 2;
-    if (bitNum == 1) {
-        bucket_num = 1;
-    }
-    bool setBValueAslow = false;
 
-    // @test1
-//    cout << "epoch " << epoch << ", layer " << layerId << endl;
+    int bitNum = request->bitnum();
+
 
     reply->set_resp_node_size(request->nodes_size());
     reply->set_shapedim(feat_size);
@@ -2975,16 +3378,11 @@ Status ServiceImpl::workerPullEmbTrendSelect(
         for (int i = 0; i < nodeNum; i++) {
             int id = request->nodes(i);
             reply->mutable_resp_none_compress_emb_concat()->Add(embs[id].begin(), embs[id].end());
-            // @test4
-//            for (float emb_di m:embs[id]) {
-//                cout << emb_dim << " ";
-//            }
-//            cout << endl;
         }
 
     } else {
         auto &embs_last_layerId = WorkerStore::embs_last[workerId][layerId];
-        auto &embs_change_rate_layerId=WorkerStore::embs_change_rate[workerId][layerId];
+        auto &embs_change_rate_layerId = WorkerStore::embs_change_rate[workerId][layerId];
         if ((epoch + 1) % trend == 0) {
             // in the last of each ten epochs (e.g., ninth epochs), non-compressed embeddings and the change-rate
 
@@ -2996,322 +3394,28 @@ Status ServiceImpl::workerPullEmbTrendSelect(
             for (int i = 0; i < nodeNum; i++) {
                 int id = request->nodes(i);
                 reply->mutable_resp_none_compress_emb_concat()->Add(embs[id].begin(), embs[id].end());
-                // @test 4
-//                for (float emb_dim:embs[id]) {
-//                    cout << emb_dim << " ";
-//                }
-//                cout << endl;
                 auto &emb_id = embs[id];
                 auto &emb_last_node = embs_last_layerId[id];
-                auto &embs_change_rate_node=embs_change_rate_layerId[id];
+                auto &embs_change_rate_node = embs_change_rate_layerId[id];
                 for (int j = 0; j < feat_size; j++) {
-                    float rate_dim=(emb_id[j] - emb_last_node[j])/(float)(trend-1);
+                    float rate_dim = (emb_id[j] - emb_last_node[j]) / (float) (trend - 1);
                     reply->mutable_resp_none_compress_rate_concat()->Add(rate_dim);
-                    embs_change_rate_node[j]=rate_dim;
-                    // @test 1
-//                    cout << emb_id[j] - emb_last_node[j] << " ";
+                    embs_change_rate_node[j] = rate_dim;
+
                 }
-                // @test 1
-//                cout << endl;
+
             }
 
             embs_last_layerId = embs;
 
         } else {
-            // 发送压缩嵌入
-            vector<Bucket> buckets;
-            double interval = (max_value - min_value) / (double) (bucket_num);
-
-            uint int_interval = (int) (interval * pow(10, 8));
-            uint int_interval_addone = int_interval + 1;
-
-            interval = int_interval_addone / pow(10, 8);
-//            cout << "bucket_num,interval_bucket:" << bucket_num << "," << interval << endl;
-//            cout << "int_interval,add1:" << int_interval << "," << int_interval_addone << endl;
-
-//        clock_t start_compress = clock();
-            if (min_value < 0 && max_value > 0) {
-                for (int i = 0; i < bucket_num + 1; i++) {
-                    if (min_value + interval * i < 0 && min_value + interval * (i + 1) > 0) {
-                        // 建两个桶,以0的分界线
-                        Bucket b1;
-                        b1.bid = i;
-                        b1.lower_bound = min_value + interval * i;
-                        b1.upper_bound = 0;
-
-                        b1.value = (b1.lower_bound + b1.upper_bound) / 2;
-
-                        buckets.push_back(b1);
-                        reply->add_values(b1.value);
-
-                        i = i + 1;
-                        Bucket b2;
-                        b2.bid = i;
-                        b2.lower_bound = 0;
-                        b2.upper_bound = min_value + interval * (i + 1);
-                        if (i == bucket_num) {
-                            b2.upper_bound = max_value;
-                        }
-
-                        b2.value = (b2.lower_bound + b2.upper_bound) / 2;
-
-
-                        buckets.push_back(b2);
-                        reply->add_values(b2.value);
-                    } else {
-                        Bucket b;
-                        b.bid = i;
-                        b.lower_bound = min_value + interval * i;
-                        b.upper_bound = min_value + interval * (i + 1);
-                        if (i == bucket_num - 1) {
-                            b.upper_bound = max_value;
-                        }
-                        if (b.lower_bound < 0 && setBValueAslow) {
-                            b.value = b.upper_bound;
-                        } else if (b.lower_bound > 0 && setBValueAslow) {
-                            b.value = b.lower_bound;
-                        } else {
-                            b.value = (b.lower_bound + b.upper_bound) / 2;
-                        }
-
-                        buckets.push_back(b);
-                        reply->add_values(b.value);
-                    }
-                }
+            if (bitNum == 1) {
+                compress1BitEmbsTrend(request, reply, embs);
             } else {
-                for (int i = 0; i < bucket_num; i++) {
-                    Bucket b;
-                    b.bid = i;
-                    b.lower_bound = min_value + interval * i;
-                    b.upper_bound = min_value + interval * (i + 1);
-                    if (i == bucket_num - 1) {
-                        b.upper_bound = max_value;
-                    }
-
-                    if (b.lower_bound < 0 && setBValueAslow) {
-                        b.value = b.upper_bound;
-                    } else if (b.lower_bound > 0 && setBValueAslow) {
-                        b.value = b.lower_bound;
-                    } else {
-                        b.value = (b.lower_bound + b.upper_bound) / 2;
-                    }
-
-                    // @test 1
-//                    if(layerId==0){
-//                        b.value=100;
-//                        buckets.push_back(b);
-//                        reply->add_values(b.value);
-//                    }else{
-//                        buckets.push_back(b);
-//                        reply->add_values(b.value);
-//                    }
-                    buckets.push_back(b);
-                    reply->add_values(b.value);
-                }
+                compressBitsEmbsTrend(request, reply, embs);
             }
-
-            Bucket b;
-            b.bid = buckets.size();
-            b.lower_bound = 0;
-            b.upper_bound = 0;
-            b.value = 0;
-            buckets.push_back(b);
-            reply->add_values(0);
-
-
-
-            int bucketSize = buckets.size();
-            int nodeNum = request->nodes_size();
-            reply->set_resp_node_size(nodeNum);
-            int oneIntDimNum = 32 / bitNum;
-            vector<uint> itemsVec(oneIntDimNum);
-            int left_num = feat_size % oneIntDimNum;
-            int compress_dim_size;
-            if (left_num == 0) {
-                compress_dim_size = feat_size / oneIntDimNum;
-            } else {
-                compress_dim_size = feat_size / oneIntDimNum + 1;
-            }
-            auto *mutable_emb_reply = reply->mutable_resp_compress_emb_concat();
-//            mutable_emb_reply->Reserve(nodeNum * compress_dim_size);
-
-            int node_left_num = nodeNum % 16;
-            int compress_node_size;
-            if (node_left_num == 0) {
-                compress_node_size = nodeNum / 16;
-            } else {
-                compress_node_size = nodeNum / 16 + 1;
-            }
-            auto *mutable_value_flag_reply = reply->mutable_value_select_flags();
-            mutable_value_flag_reply->Reserve(compress_node_size);
-
-            uint compressValue = 0;
-            uint compressNode = 0;
-
-            vector<float> count_flag_num(3);
-
-            auto last_embs = WorkerStore::embs_last[workerId][layerId];
-            auto rates = WorkerStore::embs_change_rate[workerId][layerId];
-            reply->mutable_value_select_flags()->Reserve(nodeNum);
-            for (int n = 0; n < nodeNum; n++) {
-                auto id = request->nodes(n);
-                uint bucket_id;
-                // the non-error embs
-                auto &emb_second = embs[id];
-                auto last_embs_node = last_embs[id];
-                auto rates_node = rates[id];
-                float comp_error = 0;
-                float pred_error = 0;
-                float mix_error = 0;
-
-//                float max_error=0;
-//                int flag=0;
-
-
-                vector<uint> vec_feat_comp_tmp(compress_dim_size);
-
-                // @test 3
-//                vector<float> comp(feat_size);
-//                vector<float> pred(feat_size);
-//                vector<float> mix(feat_size);
-
-                for (uint i = 0; i < feat_size; i++) {
-                    float dim = emb_second[i];
-                    if (dim == 0) {
-                        bucket_id = bucketSize - 1;
-                    } else {
-                        bucket_id = (int) (dim / interval);
-                    }
-                    uint itemId = i % oneIntDimNum;
-                    // compare the values of compress, predict and (c+p)/2
-                    float compDim = buckets[bucket_id].value;
-                    float predDim = 0;
-                    if (epoch / trend == 0) {
-                        // predictive value is the last embs
-                        predDim = last_embs_node[i];
-                    } else {
-                        int round = (epoch + 1) % trend;
-                        predDim = round * rates_node[i] + last_embs_node[i];
-                    }
-                    float mixDim = (predDim + compDim) / 2;
-
-
-                    comp_error += abs(compDim - dim);
-                    pred_error += abs(predDim - dim);
-                    mix_error += abs(mixDim - dim);
-
-                    // @test 3
-//                    comp[i] = compDim;
-//                    pred[i] = predDim;
-//                    mix[i] = mixDim;
-
-                    compressValue = compressValue | (bucket_id << (32 - (itemId + 1) * bitNum));
-
-                    if (itemId == (oneIntDimNum - 1)) {
-                        vec_feat_comp_tmp[i / oneIntDimNum] = compressValue;
-                        compressValue = 0;
-                    }
-
-                }
-                // @test for for
-//                if(id==0){
-//                    for (int i = 0; i < 4; i++) {
-//                        if (i == 0) {
-//                            cout << "compress:";
-//                        } else if (i == 1) {
-//                            cout << "predict:";
-//                        } else if (i == 2) {
-//                            cout << "mix:";
-//                        } else {
-//                            cout << "real:";
-//                        }
-//
-//                        for (int j = 0; j < feat_size; j++) {
-//                            if (i == 0) {
-//                                cout << comp[j] << " ";
-//                            } else if (i == 1) {
-//                                cout << pred[j] << " ";
-//                            } else if (i == 2) {
-//                                cout << mix[j] << " ";
-//                            } else {
-//                                cout << emb_second[j] << " ";
-//                            }
-//                        }
-//                        cout << endl;
-//                    }
-//                }
-
-
-
-                if (left_num != 0) {
-                    vec_feat_comp_tmp[feat_size / oneIntDimNum] = compressValue;
-                    compressValue = 0;
-                }
-
-                uint index_WithMinError = getIndexWithMinError(comp_error, pred_error, mix_error);
-
-                // @test 5
-//                if(layerId==0){
-//                    index_WithMinError=1;
-//                }else{
-//                    index_WithMinError=0;
-//                }
-//                index_WithMinError=0;
-
-                // @test if
-//                if(id==1){
-//                    index_WithMinError=0;
-//                }else if(id==2){
-//                    index_WithMinError=1;
-//                }else if(id==3){
-//                    index_WithMinError=2;
-//                }
-
-                count_flag_num[index_WithMinError]++;
-
-
-//                index_WithMinError=0;
-//                index_WithMinError=2;
-
-                // @test 2
-//                cout<<"comp,pred,mix:"<<comp_error<<","<<pred_error<<","<<mix_error<<endl;
-//                cout<<"index_WithMinError:"<<index_WithMinError<<endl;
-
-                if (index_WithMinError != 1) {
-                    // predictive value does not need to be sent,others need to be sent the value of compression
-                    mutable_emb_reply->Add(vec_feat_comp_tmp.begin(), vec_feat_comp_tmp.end());
-
-                }
-
-                uint itemId_node = n % 16;
-                compressNode = compressNode | (index_WithMinError << (32 - (itemId_node + 1) * 2));
-                if (itemId_node == (16 - 1)) {
-//                    compressData_concat(bitNum, itemsVec, mutable_emb_reply);
-                    mutable_value_flag_reply->Add(compressNode);
-                    compressNode = 0;
-                }
-
-            }
-
-            if (node_left_num != 0) {
-                mutable_value_flag_reply->Add(compressNode);
-                compressNode = 0;
-            }
-
-//            cout<<"epoch "<<epoch<<",layer:"<<layerId<<","<<count_flag_num[0]<<","<<count_flag_num[1]<<","<<count_flag_num[2]<<endl;
-
-
-            reply->set_resp_featdim_size(compress_dim_size);
-            if(layerId==0){
-                reply->set_comp_data_percent(0);
-            } else{
-                reply->set_comp_data_percent((float) (count_flag_num[0]+count_flag_num[2]) / (float) nodeNum);
-            }
-
-
-
         }
-        reply->set_shapedim(embs.begin()->second.size());
+//        reply->set_shapedim(embs.begin()->second.size());
     }
 
 
@@ -3655,8 +3759,9 @@ Status ServiceImpl::workerPullGCompress(ServerContext *context, const EmbMessage
 
 
 }
+
 Status ServiceImpl::workerSendTrainNode(ServerContext *context, const NodeMessage *request, BoolMessage *reply) {
-    for(int i = 0; i < request->nodes_size() ;i++){
+    for (int i = 0; i < request->nodes_size(); i++) {
         int n = request->nodes(i);
         ServerStore::train_nodes.push_back(n);
     }
@@ -3665,14 +3770,15 @@ Status ServiceImpl::workerSendTrainNode(ServerContext *context, const NodeMessag
 
 Status ServiceImpl::serverSendTrainNode(ServerContext *context, const ContextMessage *request, NodeMessage *reply) {
     vector<int> train_nodes = ServerStore::train_nodes;
-    for(int n : train_nodes){
+    for (int n : train_nodes) {
         reply->add_nodes(n);
     }
     return Status::OK;
 }
 
-Status ServiceImpl::workerSendValNode(ServerContext *context, const NodeMessage *request, BoolMessage *reply) {;
-    for(int i = 0; i < request->nodes_size() ;i++){
+Status ServiceImpl::workerSendValNode(ServerContext *context, const NodeMessage *request, BoolMessage *reply) {
+    ;
+    for (int i = 0; i < request->nodes_size(); i++) {
         int n = request->nodes(i);
         ServerStore::val_nodes.push_back(n);
     }
@@ -3681,22 +3787,24 @@ Status ServiceImpl::workerSendValNode(ServerContext *context, const NodeMessage 
 
 Status ServiceImpl::serverSendValNode(ServerContext *context, const ContextMessage *request, NodeMessage *reply) {
     vector<int> train_nodes = ServerStore::val_nodes;
-    for(int n : train_nodes){
+    for (int n : train_nodes) {
         reply->add_nodes(n);
     }
     return Status::OK;
 }
 
-Status ServiceImpl::workerSendTestNode(ServerContext *context, const NodeMessage *request, BoolMessage *reply) {;
-    for(int i = 0; i < request->nodes_size() ;i++){
+Status ServiceImpl::workerSendTestNode(ServerContext *context, const NodeMessage *request, BoolMessage *reply) {
+    ;
+    for (int i = 0; i < request->nodes_size(); i++) {
         int n = request->nodes(i);
         ServerStore::test_nodes.push_back(n);
     }
     return Status::OK;
 }
+
 Status ServiceImpl::serverSendTestNode(ServerContext *context, const ContextMessage *request, NodeMessage *reply) {
     vector<int> train_nodes = ServerStore::test_nodes;
-    for(int n : train_nodes){
+    for (int n : train_nodes) {
         reply->add_nodes(n);
     }
     return Status::OK;

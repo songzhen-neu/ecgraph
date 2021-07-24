@@ -55,6 +55,8 @@ public:
     static vector<vector<uint>> bucketPositionBitMap;
 
     static float comp_percent;
+    static double embs_max;
+    static double embs_min;
 
 
 

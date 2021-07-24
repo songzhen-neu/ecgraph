@@ -18,46 +18,60 @@ class Context(object):
         'id': -1,
         'worker_address': worker_address,
         'master_address': None,
-        'server_num': 1,
-        'worker_num': 1,
-        'lr': 0.1,
+        'server_num': 4,
+        'worker_num': 4,
+        'lr': 0.01,
+
+        'print_result_interval':5,
 
         # 'data_path': '/mnt/data/reddit-small',
         # 'raw_data_path': '/mnt/data/reddit-small',
         # 'data_num': 232965,  # 231443
-        # 'hidden': [64,64,64],
+        # 'hidden': [16,16],
         # 'feature_dim': 602,
         # 'class_num': 41,
         # 'edge_num': 57307946,  # 11606919
-        # 'train_num':153932,
+        # 'train_num':15393, #153932
         # 'val_num':23699,
-        # 'test_num':55334,
+        # 'test_num':5533, #55334
 
-        'data_path': '/mnt/data/cora/',
-        'raw_data_path':'/mnt/data_raw/cora/',
-        'hidden': [16],
-        'data_num': 2708,
-        'feature_dim': 1433,
-        'class_num': 7,
-        'edge_num':5278,
-        'train_num':140, #140
-        'val_num':300,
-        'test_num':1000,
+        # 'data_path': '/mnt/data/cora/',
+        # 'raw_data_path':'/mnt/data_raw/cora/',
+        # 'hidden': [256,256],
+        # 'data_num': 2708,
+        # 'feature_dim': 1433,
+        # 'class_num': 7,
+        # 'edge_num':5278,
+        # 'train_num':1208, #140
+        # 'val_num':500,
+        # 'test_num':1000,
 
-        # 'data_path': '../../data/ogbn-products',
-        # 'raw_data_path':'../../data_raw/ogbn-products',
-        # 'hidden': [16,4,4],
-        # 'data_num': 2449029,
-        # 'feature_dim': 100,
-        # 'class_num': 47,
-        # 'edge_num':61859012,
-        # 'train_num':196615,
-        # 'val_num':39323,
-        # 'test_num':2213091,
+        # 'data_path': '/mnt/data/ogbn-papers100M',
+        # 'raw_data_path':'/mnt/data_raw/ogbn-papers100M',
+        # 'hidden': [256,256],
+        # 'data_num': 1546782,
+        # 'feature_dim': 128,
+        # 'class_num': 172,
+        # 'edge_num':13649351,
+        # 'train_num':1207179, #140
+        # 'val_num':125265,
+        # 'test_num':214338,
+
+        'data_path': '/mnt/data/ogbn-products',
+        'raw_data_path':'/mnt/data_raw/ogbn-products',
+        'hidden': [16,16],
+        'data_num': 2449029,
+        'feature_dim': 100,
+        'class_num': 47,
+        'edge_num':61859012,
+        'train_num':196615,
+        'val_num':39323,
+        'test_num':2213091,
+
 
         # 'data_path': '/mnt/data/pubmed',
         # 'raw_data_path':'/mnt/data/pubmed',
-        # 'hidden': [16,16],
+        # 'hidden': [128],
         # 'data_num': 19717,
         # 'feature_dim': 500,
         # 'class_num': 3,
@@ -67,23 +81,23 @@ class Context(object):
         # 'test_num':4930,
 
 
-        # 'data_path': '../../data/test',
-        # 'raw_data_path':'../../data_raw/test',
-        # 'hidden': [16,16],
+        # 'data_path': '/mnt/data/test',
+        # 'raw_data_path':'/mnt/data/test',
+        # 'hidden': [16],
         # 'data_num': 36,
         # 'feature_dim': 34,
         # 'class_num': 2,
         # 'edge_num':1,
-        # 'train_num':36,
-        # 'val_num':0,
-        # 'test_num':0,
+        # 'train_num':16,
+        # 'val_num':4,
+        # 'test_num':4,
 
         'master_id': 0,
-        'firstHopForWorkers': [],
+        # 'firstHopForWorkers': [],
         'ifCompress': False,
         'ifMomentum': False,
         'layerNum': 2,
-        'bitNum': 1,  # 2,4,8,16bits分别对应桶数2,14,254,65534
+        'bitNum': 2,  # 2,4,8,16bits分别对应桶数2,14,254,65534
         'iterNum': 3000,
         'trend':10,
         'firstProp': True,
@@ -93,7 +107,7 @@ class Context(object):
         'isChangeRate': False,
         'isChangeBitNum':False,
         'changeRateMode':'select', # select or normal
-        'partitionMethod': 'metis',  # hash,metis
+        'partitionMethod': 'hash',  # hash,metis
         # accorMix 前k-1层 compensates by Layer, the last layer compensates by Iteration;
         # accorMix2 the first k-1 compensates by Iteration, the last layer pass the complete data_raw
         # accorMix3 前n轮Mix2，从第n+1轮开始按迭代轮

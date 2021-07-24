@@ -796,7 +796,7 @@ void DGNNClient::pullDataFromMasterGeneral(
 }
 
 py::array_t<float> DGNNClient::worker_pull_needed_G_compress(py::array_t<int> &needed_G_set, bool ifCompensate,
-                                                             int layerId, int epoch, int bucketNum, int bitNum) {
+                                                             int layerId, int epoch,  int bitNum) {
     ClientContext context;
     EmbMessage request;
     EmbMessage reply;
@@ -804,8 +804,9 @@ py::array_t<float> DGNNClient::worker_pull_needed_G_compress(py::array_t<int> &n
     request.set_layerid(layerId);
     request.set_ifcompensate(ifCompensate);
     request.set_iterround(epoch);
-    request.set_bucketnum(bucketNum);
     request.set_bitnum(bitNum);
+
+
 
     py::buffer_info nodes_buf = needed_G_set.request();
     if (nodes_buf.ndim != 1) {
@@ -818,7 +819,11 @@ py::array_t<float> DGNNClient::worker_pull_needed_G_compress(py::array_t<int> &n
         request.mutable_nodes()->Add(ptr1[i]);
     }
 
+
+
     Status status = stub_->workerPullGCompress(&context, request, &reply);
+
+
 
     // 开始解析压缩后的G
     vector<float> bucket;

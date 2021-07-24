@@ -14,7 +14,7 @@ def parserInit():
 
     parser.add_argument('--if_cprs_trend_backcprs_backcpst_changeBit', type=str, help='if_cprs_trend_backcprs_backcpst_changeBit')
 
-    parser.add_argument('--bit_backbit_trend', type=str, help='bit_backbit_trend')
+    parser.add_argument('--bit_backbit_trend_printepoch', type=str, help='bit_backbit_trend_printepoch')
 
     parser.add_argument('--iter_lr_pttMethod', type=str, help='iter_lr_pttMethod')
 
@@ -88,10 +88,11 @@ def parserInit():
         elif if_array[4]  == 'true':
             context.glContext.config['isChangeBitNum'] = True
 
-        bit_backbit_trend=str.split(args.bit_backbit_trend,',')
-        context.glContext.config['bitNum'] = int(bit_backbit_trend[0])
-        context.glContext.config['bitNum_backProp'] = int(bit_backbit_trend[1])
-        context.glContext.config['trend'] = int(bit_backbit_trend[2])
+        bit_backbit_trend_printepoch=str.split(args.bit_backbit_trend_printepoch,',')
+        context.glContext.config['bitNum'] = int(bit_backbit_trend_printepoch[0])
+        context.glContext.config['bitNum_backProp'] = int(bit_backbit_trend_printepoch[1])
+        context.glContext.config['trend'] = int(bit_backbit_trend_printepoch[2])
+        context.glContext.config['print_result_interval'] = int(bit_backbit_trend_printepoch[3])
 
         context.glContext.config['data_path'] = args.data_path
 

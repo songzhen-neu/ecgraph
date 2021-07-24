@@ -44,8 +44,9 @@ def run_gnn(dgnnClient, model):
     # 从远程获取顶点信息（主要是边缘顶点一阶邻居信息）后，在本地进行传播
     # features, adjs, labels are based on the order of new id, and these only contains the local nodes
 
-    data = dt.load_datav2(dgnnClient)
-    agg_node = data['agg_node']
+    # data = dt.load_datav2(dgnnClient)
+    # agg_node = data['agg_node']
+    data=dt.load_data(dgnnClient)
     features = data['features']
     adjs = data['adjs']
     nodes_from_server = data['nodes_from_server']
@@ -68,13 +69,13 @@ def run_gnn(dgnnClient, model):
 
     edges = []
     # 从adj中解析出edge
-    # for i in range(len(adjs)):
-    #     for nei_id in adjs[i]:
-    #         edges.append([i, nei_id])
-    # Yu
-    for i in agg_node:
+    for i in range(len(adjs)):
         for nei_id in adjs[i]:
             edges.append([i, nei_id])
+    # Yu
+    # for i in agg_node:
+    #     for nei_id in adjs[i]:
+    #         edges.append([i, nei_id])
 
     edges = np.array(edges)
     adjs = sp.coo_matrix((np.ones(edges.shape[0]), (edges[:, 0], edges[:, 1])),

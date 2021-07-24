@@ -3,6 +3,7 @@ import context.context as ct
 import numpy as np
 import scipy.sparse as sp
 
+
 fileReadName=ct.glContext.config['data_path']
 fileWriteName=ct.glContext.config['data_path']
 nodeNum=ct.glContext.config['data_num']
@@ -10,8 +11,8 @@ featDim=ct.glContext.config['feature_dim']
 classNum=ct.glContext.config['class_num']
 
 
-edgesFileReadName=fileReadName+'/edges.txt'
-featsFileReadName=fileReadName+'/featsClass.txt'
+edgesFileReadName=fileReadName+'/edges_raw.txt'
+featsFileReadName=fileReadName+'/featsClass_raw.txt'
 
 edgesFileWriteName=fileWriteName+'/edges.txt'
 featsFileWriteName=fileWriteName+'/featsClass.txt'
@@ -22,17 +23,25 @@ def feature_normalize(sparse_matrix):
     Reference:
       DGL(https://github.com/dmlc/dgl).
     """
-    row_sum = np.array(sparse_matrix.sum(1))
+    mx_abs=np.abs(sparse_matrix)
+    row_sum = np.array(mx_abs.sum(1))
     row_norm = np.power(row_sum, -1).flatten()
     row_norm[np.isinf(row_norm)] = 0.
     row_matrix_norm = sp.diags(row_norm)
-    sparse_matrix = row_matrix_norm.dot(sparse_matrix)
-    return sparse_matrix
+    sparse_matrix_ret = row_matrix_norm.dot(sparse_matrix)
+    # norm=np.array(sparse_matrix.multiply(sparse_matrix).sum(1))
+    # norm=np.power(norm,-1/2).flatten()
+    # norm[np.isinf(norm)]=0.
+    # matrix_norm = sp.diags(norm)
+    # sparse_matrix_ret=matrix_norm.dot(np.abs(sparse_matrix))
+
+    return sparse_matrix_ret
 
 if __name__ == '__main__':
     featsFileRead=open(featsFileReadName,'r')
-    featsFileWrite=open(featsFileWriteName,'w+')
     allLines=featsFileRead.readlines()
+    featsFileWrite=open(featsFileWriteName,'w+')
+
     nodeMapDict={}
     countNode=0
     countLabel=0
@@ -47,7 +56,8 @@ if __name__ == '__main__':
         for dimId in range(1,featDim+1):
             feat.append(float(lineSplit[dimId]))
 
-        feat = feature_normalize(sp.csc_matrix(feat))
+        # feat = feature_normalize(sp.csc_matrix(feat))
+        feat=sp.csc_matrix(feat)
         feat = np.array(feat.todense())
         featClassStr+='\t'.join(map(str,feat[0]))
 
@@ -89,7 +99,9 @@ if __name__ == '__main__':
                 edgesMap.add(edgesStr)
                 edgesMap.add(edgesStrReverse)
             edgesFileWrite.write(edgesStr)
-    print('edges number:{0}'.format(edgeCount) )
+    for id in range(countNode):
+        edgeStr=str(id)+'\t'+str(id)+'\n'
+        edgesFileWrite.write(edgeStr)
+    print('edges number:{0}'.format(edgeCount))
     edgesFileWrite.close()
-    print('a')
 

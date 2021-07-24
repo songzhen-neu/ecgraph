@@ -33,7 +33,7 @@ class GCN(nn.Module):
         self.autograd = autograd
 
     # 输入分别是特征和邻接矩阵。最后输出为输出层做log_softmax变换的结果
-    def forward(self, x, adj, nodes, epoch):
+    def forward(self, x, adj, nodes, epoch,graph):
         start = time.time()
         # add
         laynum = context.glContext.config['layerNum']
@@ -51,14 +51,14 @@ class GCN(nn.Module):
         end = time.time()
         # print("pull weight time:{0}".format(end - start))
 
-        x = self.autograd.forward_detail(self, x, adj,nodes, epoch, weight, bias)
+        x = self.autograd.forward_detail(self, x, adj,nodes, epoch, weight, bias,graph)
 
 
 
         remoteDataNum=0
-        for i in range(len(context.glContext.config['firstHopForWorkers'])):
+        for i in range(len(graph.fsthop_for_worker)):
             if i != context.glContext.config['id']:
-                remoteDataNum=remoteDataNum+len(context.glContext.config['firstHopForWorkers'][i])
+                remoteDataNum=remoteDataNum+len(graph.fsthop_for_worker[i])
         if context.glContext.config['isChangeBitNum']:
             ra.changeCompressBit(context.glContext.dgnnClientRouterForCpp.get_comp_percent(remoteDataNum,context.glContext.config['layerNum']))
 

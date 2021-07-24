@@ -43,8 +43,8 @@ class AutoGrad(object):
     def set_activation(self, activation):
         self.activation = activation
 
-    def forward_detail_layer(self, model, x, adj, nodes, epoch, weight, bias, layer):
-        x = model.gc[layer](x, adj, nodes, epoch, weight[layer-1], bias[layer-1], self)
+    def forward_detail_layer(self, model, x, adj, nodes, epoch, weight, bias, layer,graph):
+        x = model.gc[layer](x, adj, nodes, epoch, weight[layer-1], bias[layer-1], self,graph)
         if layer == self.layer_num:
             self.Z[layer] = x
             return x
@@ -77,16 +77,16 @@ class AutoGrad(object):
         elif(act == None):
             return
 
-    def forward_detail(self, model, x, adj, nodes, epoch, weight, bias):
+    def forward_detail(self, model, x, adj, nodes, epoch, weight, bias,graph):
         for i in range(1, self.layer_num+1):
-            x = self.forward_detail_layer(model, x, adj, nodes, epoch, weight, bias, i)
+            x = self.forward_detail_layer(model, x, adj, nodes, epoch, weight, bias, i,graph)
 
         # 是否所有的层都要经过 x = F.normalize(x, p=2, dim=1)?
         # x = model.gc[self.layer_num](x, adj, nodes, epoch, weight[self.layer_num-1], bias[self.layer_num-1],self)
         # self.Z[self.layer_num] = x
         return x
 
-    def back_prop_detail_layer(self, lay_id, model, epoch, nodes, adjs , dgnnClient, id_new2old_map):
+    def back_prop_detail_layer(self, lay_id, model, epoch, nodes, adjs , dgnnClient, id_new2old_map,graph):
         if lay_id == self.layer_num:
             self.G[self.layer_num] = self.Z[self.layer_num].grad
             self.Y[self.layer_num-1] = torch.mm(self.A_X_H[self.layer_num-1].t(), self.G[self.layer_num])
@@ -95,7 +95,7 @@ class AutoGrad(object):
             self.de_activation(lay_id)
             context.glContext.dgnnServerRouter[0].server_Barrier(0)
             # pullNeighborG 代码应该进行修改
-            ra.pullNeighborG(self, nodes, epoch, lay_id+1)
+            ra.pullNeighborG(self, nodes, epoch, lay_id+1,graph)
             a = torch.spmm(adjs, self.G[lay_id+1])
             b = torch.mm(a, model.gc[lay_id+1].weight.t())
             self.G[lay_id] = torch.mul(b, self.sigma_z_grad[lay_id])
@@ -109,9 +109,9 @@ class AutoGrad(object):
                 G_dict[id_new2old_map[j]] = G_list[j]
             dgnnClient.setG(G_dict, lay_id)
 
-    def back_prop_detail(self, dgnnClient, model, id_new2old_map, nodes, epoch, adjs):
+    def back_prop_detail(self, dgnnClient, model, id_new2old_map, nodes, epoch, adjs,graph):
         for i in range(self.layer_num, 0, -1):
-            self.back_prop_detail_layer(i, model, epoch, nodes, adjs , dgnnClient, id_new2old_map)
+            self.back_prop_detail_layer(i, model, epoch, nodes, adjs , dgnnClient, id_new2old_map,graph)
 
         np.set_printoptions(threshold=sys.maxsize)
         for i in range(1, self.layer_num+1):

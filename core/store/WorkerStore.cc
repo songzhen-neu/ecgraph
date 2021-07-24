@@ -27,7 +27,8 @@ map<int,map<int,map<int,vector<float>>> > WorkerStore::embs_last;
 map<int,map<int,map<int,vector<float>>>>  WorkerStore::embs_change_rate;
 map<int,map<int,map<int,vector<float>>>>  WorkerStore::embs_change_rate_worker;
 vector<vector<int>> WorkerStore::nodesForEachWorker;
-
+double WorkerStore::embs_max;
+double WorkerStore::embs_min;
 vector<vector<uint>> WorkerStore::bucketPositionBitMap;
 
 float WorkerStore::comp_percent;

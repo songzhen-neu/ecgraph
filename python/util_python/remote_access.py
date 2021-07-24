@@ -40,17 +40,16 @@ import numpy as np
 #     elif layerId == 4:
 #         atg.G4 = torch.cat((atg.G4, needed_G), 0)
 
-def accessG_backProp(needed_G_map_from_workers, i, layerId, epoch):
+def accessG_backProp(needed_G_map_from_workers, i, layerId, epoch,graph):
     if not context.glContext.config['ifBackPropCompress']:
         needed_G_map_from_workers[i] = \
             context.glContext.dgnnWorkerRouter[i].worker_pull_needed_G(
-                context.glContext.config['firstHopForWorkers'][i], layerId)
+                graph.fsthop_for_worker[i], layerId)
     else:
         needed_G_map_from_workers[i] = \
             context.glContext.dgnnWorkerRouter[i].worker_pull_needed_G_compress(
-                context.glContext.config['firstHopForWorkers'][i],
+                graph.fsthop_for_worker[i],
                 context.glContext.config['ifBackPropCompensate'], layerId, epoch,
-                context.glContext.config['bucketNum_backProp'],
                 context.glContext.config['bitNum_backProp']
             )
     store.threadCountList_backProp[layerId - 2] += 1
@@ -62,7 +61,7 @@ def changeCompressBit(comp_percent):
         elif comp_percent>0.8 and context.glContext.config['bitNum'] !=1:
             context.glContext.config['bitNum']=context.glContext.config['bitNum']/2
 
-def pullNeighborG(autograd, nodes, epoch, layerId):
+def pullNeighborG(autograd, nodes, epoch, layerId,graph):
     # 这个函数主要是补全atg.G2
     # 去指定worker获取一阶邻居
     needed_G_map_from_workers = {}
@@ -74,16 +73,16 @@ def pullNeighborG(autograd, nodes, epoch, layerId):
                 # t=threading.Thread(target=accessG_backProp,args=(needed_G_map_from_workers, i, layerId, epoch,))
                 # t.start()
                 # _thread.start_new_thread(accessG_backProp, (needed_G_map_from_workers, i, layerId, epoch))
-                accessG_backProp(needed_G_map_from_workers, i, layerId, epoch)
+                accessG_backProp(needed_G_map_from_workers, i, layerId, epoch,graph)
             except:
                 print("Error:无法启动线程")
 
-    needed_G = [None] * (len(context.glContext.newToOldMap) - len(nodes))
+    needed_G = [None] * (len(graph.id_new2old_dict) - len(nodes))
     # for循环遍历每个从远端获取的特征
     for wid in range(context.glContext.config['worker_num']):
         if wid != context.glContext.worker_id:
-            for i, nid in enumerate(context.glContext.config['firstHopForWorkers'][wid]):
-                new_id = context.glContext.oldToNewMap[nid] - len(nodes)
+            for i, nid in enumerate(graph.fsthop_for_worker[wid]):
+                new_id = graph.id_old2new_dict[nid] - len(nodes)
                 needed_G[new_id] = needed_G_map_from_workers[wid][i]
 
     # 将needed_embs转化为tensor

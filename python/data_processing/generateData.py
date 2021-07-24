@@ -1,8 +1,8 @@
 import random
 if __name__ == '__main__':
-    filename = '../../data/test/'
-    edgesFileName = filename + 'edges.txt'
-    featsClassFileName = filename + 'featsClass.txt'
+    filename = '/mnt/data/test/'
+    edgesFileName = filename + 'edges_raw.txt'
+    featsClassFileName = filename + 'featsClass_raw.txt'
 
     edgesFile = open(edgesFileName, 'w+')
     featsClassFile = open(featsClassFileName, 'w+')
@@ -12,13 +12,14 @@ if __name__ == '__main__':
     # edgesFile.write('2\t3\n')
     # edgesFile.write('3\t4\n')
     # edgesFile.write('1\t0\n')
-
+    random.seed(1)
     # insert nodes
     for i in range(36):
         str_node=str(i)
         for j in range(34):
-            str_node+=('\t'+str(i))
-        str_node+='\ta\n'
+            str_node+=('\t'+str(random.randint(-10,10)))
+        label=random.randint(0,1)
+        str_node+='\t'+str(label)+'\n'
         featsClassFile.write(str_node)
     edgeSet=set()
 
@@ -34,9 +35,12 @@ if __name__ == '__main__':
     #             edgesFile.write(str(rand_i)+'\t'+str(i)+'\n')
     #             edgeSet.add(str(rand_i)+','+str(i))
 
+
     for i in range(36):
-        edgesFile.write('0\t'+str(i)+'\n')
-        edgesFile.write(str(i)+'\t'+'0\n')
+        for j in range(2):
+            nid=random.randint(0,35)
+            edgesFile.write(str(nid)+'\t'+str(i)+'\n')
+            edgesFile.write(str(i)+'\t'+str(nid)+'\n')
 
     edgesFile.close()
 

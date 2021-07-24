@@ -176,7 +176,7 @@ public:
     void setG(const map<int,vector<float>> &g,int id);
     py::array_t<float> worker_pull_needed_G(py::array_t<int>& needed_G_set,int layerId);
     py::array_t<float> worker_pull_needed_G_compress(py::array_t<int>& needed_G_set,
-                                                     bool ifCompensate,int layerId,int epoch,int bucketNum,int bitNum);
+                                                     bool ifCompensate,int layerId,int epoch,int bitNum);
 
 //    static void* worker_pull_emb_trend_parallel(void* metaData_void);
     static void* worker_pull_emb_trend_parallel_select(void* metaData_void);
