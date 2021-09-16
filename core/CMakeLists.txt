@@ -11,13 +11,8 @@ add_library(router service/router.cc service/router.h)
 target_link_libraries(router client_lib)
 
 
-
-
 add_library(workerStore store/WorkerStore.cc store/WorkerStore.h )
 target_link_libraries(workerStore client_lib)
-
-
-#pybind11_add_module(dgnnclient service/dgnn_client.cc)
 
 target_link_libraries(core client_lib)
 

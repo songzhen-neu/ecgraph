@@ -9,8 +9,12 @@ set(CMAKE_CXX_STANDARD 11)
 
 
 # find protobuf installation
+
+#include(FindProtobuf)
 set(protobuf_MODULE_COMPATIBLE TRUE)
-find_package(Protobuf CONFIG REQUIRED)
+#set(Protobuf_PROTOC_EXECUTABLE "/usr/local/bin/protoc")
+#find_package(Protobuf CONFIG REQUIRED)
+find_package(Protobuf REQUIRED)
 
 message(STATUS "Using protobuf ${Protobuf_VERSION}")
 
@@ -118,7 +122,7 @@ target_link_libraries(dgnn_server_lib
         ${_REFLECTION}
         ${_GRPC_GRPCPP}
         ${_PROTOBUF_LIBPROTOBUF})
-
+# if you want to generate grpc and protobuf files, you should annotate all dependencies on client_lib
 target_link_libraries(client_lib core)
 target_link_libraries(client_lib workerStore)
 
