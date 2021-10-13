@@ -345,6 +345,9 @@ int getDimBucket(const vector<Bucket> &buckets, float dim, float min_value, floa
                     return bucketid;
                 } else {
 //                    cout<<"dim22222222:"<<dim<<",bucketid:"<<bucketid<<endl;
+                    if(bucketid+1>=16){
+                        cout<<"errrrrrrrrrrrrrrrr"<<endl;
+                    }
                     return bucketid + 1;
                 }
             } else {
@@ -1516,11 +1519,21 @@ void compressData_concat(int bitNum, vector<uint> &itemVector,
     uint compressValue = 0;
     auto &bitMap = WorkerStore::bucketPositionBitMap;
 
-
-    for (int i = 0; i < 16; i++) {
+//    cout<<"8"<<endl;
+//    cout<<"itemVector.size():"<<itemVector.size()<<endl;
+//    cout<<"bitMap.size():"<<bitMap.size()<<endl;
+//    cout<<"bitMap.begin.size():"<<bitMap.begin()->size()<<endl;
+//    for (int i = 0; i < itemVector.size(); i++) {
+//        cout<<"itemVector_i:"<<itemVector[i]<<endl;
+//    }
+    for (int i = 0; i < itemVector.size(); i++) {
+//        cout<<"9"<<endl;
+//        cout<<"itemVector_i:"<<itemVector[i]<<endl;
         compressValue = compressValue | bitMap[itemVector[i]][i];
+//        cout<<"10"<<endl;
 //        compressValue=compressValue|0;
     }
+//    cout<<"11"<<endl;
     mutable_emb_reply->Add(compressValue);
 //    if (bitNum == 2) {
 //
@@ -1549,398 +1562,408 @@ void compressData_concat(int bitNum, vector<uint> &itemVector,
 
 }
 
-// wokerPullEmb_compress对获取的嵌入进行压缩，在WorkerStore中存储误差
-//Status ServiceImpl::workerPullEmbCompress_old(ServerContext *context, const ReqEmbSparseMessage *request,
-//                                          ReqEmbSparseMessage *reply) {
-////    clock_t start_time_total = clock();
-//
-//    bool setBValueAslow = false;
-//    enum CompressMethods {
-//        rangeQ, oneBit
-//    };
-//    enum CompensateMethods {
-//        accorLayer, accorIter, accorMix, accorMix2
-//    };
-////    cout<<"begin1"<<endl;
-//
-//    // 开始对需要的嵌入进行压缩,先进行基于range的压缩，scaling factor
-//    // 按照sketch压缩,但是这种实现方法需要一定时间，先试试量化这种吧
-//    // 按照该模式进行压缩
-//    // 压缩模式
-//    int compM = rangeQ;
-//
-//    // 桶的个数
-//    int bitNum = request->bitnum();
-//    int bucket_num = pow(2, bitNum) - 2;
-//    bool ifCompensate = request->ifcompensate();
-//    int layerId = request->layerid();
-//    int epoch = request->iterround();
-//    int changeToIter = request->changetoiter();
-//    int workerId = request->workerid();
-//    int layerNum = request->layernum();
-//
-//
-//    map<int, vector<float>> embs;
-//    MinMaxS min_max;
-//    float max_value = -10000;
-//    float min_value = 10000;
-//    // 去workerstore中获取一跳邻居嵌入
-//    if (ifCompensate) {
-//        if (request->compensatemethod() == "accorIter") {
-//            if (epoch == 0) {
-//                min_max = cpst_non(*request, embs, layerId);
-//            } else {
-//                min_max = cpst_iter(*request, embs, layerId, epoch);
-//            }
-//
-//        } else if (request->compensatemethod() == "accorLayer") {
-////            clock_t start_time1 = clock();
-//            if (layerId == 0) {
-//                // 不需要加补偿，直接计算最大最小值
-//                min_max = cpst_non(*request, embs, layerId);
-//
-//            } else {
-//                // 不是第0层需要加补偿
-//                while (!WorkerStore::compFlag[workerId]) {
-//                    usleep(10);
-//                }
-//                WorkerStore::compFlag[workerId] = false;
-//                min_max = cpst_layer(*request, embs, layerId);
-//
-//            }
-////            clock_t end_time1 = clock();
-////            cout << "****buchangbuchang:" << (double) (end_time1 - start_time1) / CLOCKS_PER_SEC << endl;
-//        } else if (request->compensatemethod() == "accorMix") {
-//            // it seems like accorLayer method
-//            if (epoch == 0) {
-//                // 第0轮迭代，第0层不需要补偿
-//                if (layerId == 0) {
-//                    // 不需要加补偿，直接计算最大最小值
-//                    min_max = cpst_non(*request, embs, layerId);
-//                } else {
-//                    // 不是第0层需要加补偿，补偿的是前一层的误差
-//                    min_max = cpst_layer(*request, embs, layerId);
-//
-//                }
-//            } else {
-//                // 第0层还是不需要补偿
-//                if (layerId == 0) {
-//                    // 不需要加补偿，直接计算最大最小值
-//                    min_max = cpst_non(*request, embs, layerId);
-//                } else {
-//                    // 不是第0层需要加补偿
-//                    if (layerId == layerNum - 1) {
-//                        min_max = cpst_mix(*request, embs, layerId);
-//
-//                    } else {
-//                        min_max = cpst_layer(*request, embs, layerId);
-//                    }
-//                }
-//
-//            }
-//
-//        } else if (request->compensatemethod() == "accorMix2") {
-//            if (epoch == 0 || layerId == (WorkerStore::layer_num - 1)) {
-//                // 第0轮迭代不需要补偿,最后一层迭代没有误差
-//                min_max = cpst_non(*request, embs, layerId);
-//
-//            } else {
-//                // 其他轮迭代都需要加上补偿
-//                min_max = cpst_iter(*request, embs, layerId, epoch);
-//
-//
-//            }
-//        } else if (request->compensatemethod() == "accorMix3") {
-//            // 判断，如果epoch小于changeToIter，那么执行混合，否则执行Iter
-//            // 这块只补偿，和计算最大最小值
-//
-//            if (epoch < changeToIter) {
-//                // it seems like accorLayer method
-//                if (epoch == 0) {
-//                    // 第0轮迭代，第0层不需要补偿
-//                    if (layerId == 0) {
-//                        // 不需要加补偿，直接计算最大最小值
-//                        min_max = cpst_non(*request, embs, layerId);
-//
-//                    } else {
-//                        while (!WorkerStore::compFlag[workerId]) {
-//                            usleep(10);
-//                        }
-//                        WorkerStore::compFlag[workerId] = false;
-//                        // 不是第0层需要加补偿，补偿的是前一层的误差
-//                        min_max = cpst_layer(*request, embs, layerId);
-//                    }
-//                } else {
-//                    // 第0层还是不需要补偿
-//                    if (layerId == 0) {
-//                        // 不需要加补偿，直接计算最大最小值
-//                        min_max = cpst_non(*request, embs, layerId);
-//                    } else {
-//                        while (!WorkerStore::compFlag[workerId]) {
-//                            usleep(10);
-//                        }
-//                        WorkerStore::compFlag[workerId] = false;
-//                        // 不是第0层需要加补偿
-//                        if (layerId == layerNum - 1) {
-//                            min_max = cpst_mix(*request, embs, layerId);
-//                        } else {
-//                            min_max = cpst_layer(*request, embs, layerId);
-//
-//                        }
-//                    }
-//
-//                }
-//            } else {
-//                // 执行按层补偿，第0层不需要补偿误差，第1层按照正常计算误差
-////                cout<<"layerNUm111111111111111:"<<layerNum<<endl;
-//                if (layerNum == 2) {
-//                    if (epoch == changeToIter && layerId == 0) {
-//                        // 第0层不补偿，第1层iter补偿
-//                        min_max = cpst_non(*request, embs, layerId);
-//
-//                    } else {
-//                        // 全部按迭代轮数补偿
-//                        min_max = cpst_iter(*request, embs, layerId, epoch);
-//
-//                    }
-//                } else if (layerNum == 3) {
-//                    if (epoch >= changeToIter && epoch < 2 * changeToIter) {
-//                        if (epoch == changeToIter && layerId == 1) {
-//                            // 1层在changeToIter轮时，需要layer补偿，不需要iter补偿
-//                            while (!WorkerStore::compFlag[workerId]) {
-//                                usleep(10);
-//                            }
-//                            WorkerStore::compFlag[workerId] = false;
-//                            min_max = cpst_layer(*request, embs, layerId);
-//
-//
-//                        } else if (layerId == 1) {
-//                            // 这里1层需要iter补偿和layer补偿
-//                            while (!WorkerStore::compFlag[workerId]) {
-//                                usleep(10);
-//                            }
-////                            cout<<"bbbbbb"<<endl;
-//                            WorkerStore::compFlag[workerId] = false;
-//                            min_max = cpst_mix(*request, embs, layerId);
-//                        } else if (layerId == 0) {
-//                            // 0层不需要补偿
-//                            min_max = cpst_non(*request, embs, layerId);
-//
-//                        } else if (layerId == 2) {
-//                            // 2层需要iter补偿
-//                            min_max = cpst_iter(*request, embs, layerId, epoch);
-//                        }
-//                    } else if (epoch >= 2 * changeToIter) {
-//                        if (epoch == 2 * changeToIter && (layerId == 0)) {
-//                            // changeToIter 1层需要layer补偿，0不需要iter补偿
-//                            min_max = cpst_non(*request, embs, layerId);
-//                        } else {
-//                            // 所有层（包括第0层）都需要iter补偿
-//                            min_max = cpst_iter(*request, embs, layerId, epoch);
-//                        }
-////
-//                    }
-//                }
-//
-//
-//            }
-//        }
-//
-//    } else {
-//        min_max = cpst_non(*request, embs, layerId);
-//
-//    }
-//
-//    min_value = min_max.min_value;
-//    max_value = min_max.max_value;
-//
-////    if(layerId==1){
-////        cout<<"min,max:"<<min_value<<","<<max_value<<endl;
-////    }
-//
-//
-////    cout<<"min_value,max_value:"<<min_value<<","<<max_value<<endl;
-//    reply->set_shapedim(embs.begin()->second.size());
-////    cout << "set shape_dim as:" << reply->shapedim() << endl;
-//
-//    if (compM == CompressMethods::rangeQ) {
-//        vector<Bucket> buckets;
-//        float interval = (max_value - min_value) / (float) (bucket_num);
-////        clock_t start_compress = clock();
-//        if (min_value < 0 && max_value > 0) {
-//            for (int i = 0; i < bucket_num + 1; i++) {
-//                if (min_value + interval * i < 0 && min_value + interval * (i + 1) > 0) {
-//                    // 建两个桶,以0的分界线
-//                    Bucket b1;
-//                    b1.bid = i;
-//                    b1.lower_bound = min_value + interval * i;
-//                    b1.upper_bound = 0;
-//
-//                    b1.value = (b1.lower_bound + b1.upper_bound) / 2;
-//
-//                    buckets.push_back(b1);
-//                    reply->add_values(b1.value);
-//
-//                    i = i + 1;
-//                    Bucket b2;
-//                    b2.bid = i;
-//                    b2.lower_bound = 0;
-//                    b2.upper_bound = min_value + interval * (i + 1);
-//                    if (i == bucket_num) {
-//                        b2.upper_bound = max_value;
-//                    }
-//
-//                    b2.value = (b2.lower_bound + b2.upper_bound) / 2;
-//
-//
-//                    buckets.push_back(b2);
-//                    reply->add_values(b2.value);
-//                } else {
-//                    Bucket b;
-//                    b.bid = i;
-//                    b.lower_bound = min_value + interval * i;
-//                    b.upper_bound = min_value + interval * (i + 1);
-//                    if (i == bucket_num - 1) {
-//                        b.upper_bound = max_value;
-//                    }
-//                    if (b.lower_bound < 0 && setBValueAslow) {
-//                        b.value = b.upper_bound;
-//                    } else if (b.lower_bound > 0 && setBValueAslow) {
-//                        b.value = b.lower_bound;
-//                    } else {
-//                        b.value = (b.lower_bound + b.upper_bound) / 2;
-//                    }
-//
-//                    buckets.push_back(b);
-//                    reply->add_values(b.value);
-//                }
-//            }
-//        } else {
-//            for (int i = 0; i < bucket_num; i++) {
-//                Bucket b;
-//                b.bid = i;
-//                b.lower_bound = min_value + interval * i;
-//                b.upper_bound = min_value + interval * (i + 1);
-//                if (i == bucket_num - 1) {
-//                    b.upper_bound = max_value;
-//                }
-//
-//                if (b.lower_bound < 0 && setBValueAslow) {
-//                    b.value = b.upper_bound;
-//                } else if (b.lower_bound > 0 && setBValueAslow) {
-//                    b.value = b.lower_bound;
-//                } else {
-//                    b.value = (b.lower_bound + b.upper_bound) / 2;
-//                }
-//                buckets.push_back(b);
-//                reply->add_values(b.value);
-//            }
-//        }
-//
-//        Bucket b;
-//        b.bid = buckets.size();
-//        b.lower_bound = 0;
-//        b.upper_bound = 0;
-//        b.value = 0;
-//        buckets.push_back(b);
-//        reply->add_values(0);
-//
-//
-//        if (ifCompensate) {
-//            // new a thread to do this
-//            pthread_t thread;
-//            auto comArgs = new CompensateArgs;
-//            comArgs->request = request;
-//            comArgs->epoch = epoch;
-//            comArgs->embs = embs;
-//            comArgs->reply = reply;
-//            comArgs->buckets = buckets;
-//            comArgs->layerId = layerId;
-//            comArgs->changeToIter = changeToIter;
-//            comArgs->workerId = workerId;
-//            comArgs->layerNum = layerNum;
-//            comArgs->max_value = max_value;
-//            comArgs->min_value = min_value;
-//            comArgs->interval = interval;
-//            compensateMethodForEmb((void *) comArgs);
-//        } else {
-//            // 开始构建压缩后的张量
-//            vector<uint> itemsVec;
-//            int feat_size = embs.begin()->second.size();
-//            int nodeNum = embs.size();
-//
-//            for (const auto &emb:embs) {
-//                IntTensorMessage *tensor = reply->add_embs();
-//                tensor->set_vid(emb.first);
-//                int bucket_id;
-//                auto &emb_second = emb.second;
-//                for (int i = 0; i < feat_size; i++) {
-//                    bucket_id = getDimBucket(buckets, emb_second[i], min_value, max_value, interval);
-//                    itemsVec.push_back(bucket_id);
-//                    compressData(bitNum, itemsVec, tensor);
-//
-////                    if (layerId == 1 && emb.first == 3 && i == 5) {
-////                        cout << "compensate value:" << emb.second[5] << ",compress value:" << buckets[bucket_id].value
-////                             << ",bucket id:" << bucket_id
-////                             << ",error:" << emb.second[5] - buckets[bucket_id].value << endl;
-////                    }
-//
-//                }
-//
-//                // 某个嵌入向量全部压缩完，还有不够数量未压缩的
-//                if (itemsVec.size() != 0) {
-//                    uint compress_value = 0;
-//                    if (bitNum == 2) {
-//                        for (int i = 0; i < itemsVec.size(); i++) {
-//                            itemsVec[i] = itemsVec[i] << (30 - 2 * i);
-//                            compress_value = compress_value | itemsVec[i];
-//                        }
-//                    } else if (bitNum == 4) {
-//                        for (int i = 0; i < itemsVec.size(); i++) {
-//                            itemsVec[i] = itemsVec[i] << (28 - 4 * i);
-//                            compress_value = compress_value | itemsVec[i];
-//                        }
-//                    } else if (bitNum == 8) {
-//                        for (int i = 0; i < itemsVec.size(); i++) {
-//                            itemsVec[i] = itemsVec[i] << (24 - 8 * i);
-//                            compress_value = compress_value | itemsVec[i];
-//                        }
-//                    } else if (bitNum == 16) {
-//                        for (int i = 0; i < itemsVec.size(); i++) {
-//                            itemsVec[i] = itemsVec[i] << (16 - 16 * i);
-//                            compress_value = compress_value | itemsVec[i];
-//                        }
-//                    }
-//
-//                    tensor->add_tensor(compress_value);
-//                    itemsVec.clear();
-//                }
-//
-//            }
-//
-//
-////            cout << "embs size::" << reply->embs_size() << ",dim size:" << reply->embs(0).tensor_size() << endl;
-//
-//        }
-//
-//
-////        for (auto bucket:buckets) {
-////            cout <<"interval:"<<interval<<",(min_value,max_value):("<<min_value<<","<<max_value<<"),bucket " << bucket.bid << ",bucket (lower,upper,value):(" << bucket.lower_bound << ","
-////                 << bucket.upper_bound << "," << bucket.value <<")"<< endl;
-////        }
-//
-//    }
-//
-//
-//
-//
-////    clock_t end_time_total = clock();
-////    cout << "reply->ByteSizeLong():" << reply->ByteSizeLong() << endl;
-////    cout << "Compress Process Time:" << (double) (end_time_total - start_time_total) / CLOCKS_PER_SEC << "s" << endl;
-//
-//    return Status::OK;
-//
-//}
+
+
+void compress1BitG(const EmbMessage *request, EmbMessage *reply){
+    int layerid=request->layerid();
+    auto &g = WorkerStore::G_map[layerid];
+    auto min_value = WorkerStore::g_min[layerid];
+    auto max_value = WorkerStore::g_max[layerid];
+    vector<Bucket> buckets;
+    Bucket b0{};
+    b0.bid = 0;
+    b0.lower_bound = (float) min_value;
+    b0.upper_bound = 0;
+    b0.value = -1;
+    buckets.push_back(b0);
+    reply->add_values(b0.value);
+    Bucket b1{};
+    b1.bid = 1;
+    b1.lower_bound = 0;
+    b1.upper_bound = (float) max_value;
+    b1.value = 1;
+    buckets.push_back(b1);
+    reply->add_values(b1.value);
+
+//    cout << "max_min_value:" << max_value << "," << min_value << endl;
+    reply->set_shapedim(g.begin()->second.size());
+
+    int nodeNum = request->nodes_size();
+    reply->set_resp_node_size(nodeNum);
+    int bitNum = request->bitnum();
+    // 开始构建压缩后的张量
+    int oneIntDimNum = 32 / bitNum;
+    vector<uint> itemsVec(oneIntDimNum);
+    int feat_size = g.begin()->second.size();
+
+    int left_num = feat_size % oneIntDimNum;
+    int compress_dim_size;
+    if (left_num == 0) {
+        compress_dim_size = feat_size / oneIntDimNum;
+    } else {
+        compress_dim_size = feat_size / oneIntDimNum + 1;
+    }
+    auto *mutable_emb_reply = reply->mutable_resp_compress_emb_concat();
+    mutable_emb_reply->Reserve(nodeNum * compress_dim_size);
+//        vector<uint> vec_emb(nodeNum*compress_dim_size);
+//        mutable_emb_reply->Add(vec_emb.begin(),vec_emb.end());
+
+//        auto& bitMap=WorkerStore::bucketPositionBitMap;
+    uint compressValue = 0;
+    for (int n = 0; n < nodeNum; n++) {
+        auto id = request->nodes(n);
+        uint bucket_id;
+        auto &g_second = g[id];
+        for (uint i = 0; i < feat_size; i++) {
+            float dim = g_second[i];
+            if (dim >= 0) {
+                bucket_id = 1;
+            } else {
+                bucket_id = 0;
+            }
+            uint itemId = i % oneIntDimNum;
+            compressValue = compressValue | (bucket_id << (32 - (itemId + 1) * bitNum));
+
+            if (itemId == (oneIntDimNum - 1)) {
+                mutable_emb_reply->Add(compressValue);
+                compressValue = 0;
+            }
+
+        }
+        if (left_num != 0) {
+            mutable_emb_reply->Add(compressValue);
+            compressValue = 0;
+        }
+    }
+    reply->set_resp_featdim_size(compress_dim_size);
+}
+
+void initGCompensate(int layerid){
+    map<int,vector<float>>tmp;
+    WorkerStore::G_compensate.insert(pair<int,map<int,vector<float>>>(layerid,tmp));
+}
+
+void gCompensate1Bit(const EmbMessage* request,EmbMessage* reply){
+    // no errors are compensated, however, 0-th epoch need to compute the errors
+    int epoch=request->epoch();
+    int layerid=request->layerid();
+    map<int,vector<float>> g_tmp;
+    auto &g_compensate_layerid=WorkerStore::G_compensate[layerid];
+    auto &g = WorkerStore::G_map[layerid];
+    auto min_value = WorkerStore::g_min[layerid];
+    auto max_value = WorkerStore::g_max[layerid];
+    if(epoch==0){
+        initGCompensate(layerid);
+        g_tmp=g;
+    }
+    if(epoch!=0){
+        // need to be compensated
+        for(int i=0;i<request->nodes_size();i++){
+            auto id= request->nodes(i);
+            auto g_nodei=g[id];
+            auto& g_comp_nodei=g_compensate_layerid[id];
+            int size=g_nodei.size();
+            vector<float> g_nodei_tmp(size);
+            for(int j=0;j<size;j++){
+                g_nodei_tmp[j]=g_nodei[j]+g_comp_nodei[j];
+                if(g_nodei_tmp[j]>max_value){
+                    max_value=g_nodei_tmp[j];
+                }else if(g_nodei_tmp[j]<min_value){
+                    min_value=g_nodei_tmp[j];
+                }
+            }
+            if(g_tmp.count(id)==0){
+                g_tmp.insert(pair<int,vector<float>>(id,g_nodei_tmp));
+            }else{
+                g_tmp[id]=g_nodei_tmp;
+            }
+        }
+    }
+
+
+    vector<Bucket> buckets;
+    Bucket b0{};
+    b0.bid = 0;
+    b0.lower_bound = (float) min_value;
+    b0.upper_bound = 0;
+    b0.value = -1;
+    buckets.push_back(b0);
+    reply->add_values(b0.value);
+    Bucket b1{};
+    b1.bid = 1;
+    b1.lower_bound = 0;
+    b1.upper_bound = (float) max_value;
+    b1.value = 1;
+    buckets.push_back(b1);
+    reply->add_values(b1.value);
+
+    reply->set_shapedim(g_tmp.begin()->second.size());
+
+    int nodeNum = request->nodes_size();
+    reply->set_resp_node_size(nodeNum);
+    int bitNum = request->bitnum();
+    // 开始构建压缩后的张量
+    int oneIntDimNum = 32 / bitNum;
+    vector<uint> itemsVec(oneIntDimNum);
+    int feat_size = g_tmp.begin()->second.size();
+
+    int left_num = feat_size % oneIntDimNum;
+    int compress_dim_size;
+    if (left_num == 0) {
+        compress_dim_size = feat_size / oneIntDimNum;
+    } else {
+        compress_dim_size = feat_size / oneIntDimNum + 1;
+    }
+    auto *mutable_emb_reply = reply->mutable_resp_compress_emb_concat();
+    mutable_emb_reply->Reserve(nodeNum * compress_dim_size);
+
+    uint compressValue = 0;
+    for (int n = 0; n < nodeNum; n++) {
+        auto id = request->nodes(n);
+        uint bucket_id;
+        auto &g_second = g_tmp[id];
+        vector<float> errors_for_noden(feat_size);
+        for (uint i = 0; i < feat_size; i++) {
+            float dim = g_second[i];
+            if (dim >= 0) {
+                bucket_id = 1;
+            } else {
+                bucket_id = 0;
+            }
+
+            float dim_compress=buckets[bucket_id].value;
+            float error=dim - dim_compress;
+            errors_for_noden[i]=error;
+
+            uint itemId = i % oneIntDimNum;
+            compressValue = compressValue | (bucket_id << (32 - (itemId + 1) * bitNum));
+
+            if (itemId == (oneIntDimNum - 1)) {
+                mutable_emb_reply->Add(compressValue);
+                compressValue = 0;
+            }
+
+        }
+        unique_lock<mutex> lock1(ThreadUtil::mtx_gcompensate);
+
+        if(g_compensate_layerid.count(id)==0){
+            g_compensate_layerid.insert(pair<int,vector<float>>(id,errors_for_noden));
+        } else{
+            g_compensate_layerid[id]=errors_for_noden;
+        }
+
+
+        lock1.unlock();
+
+
+        if (left_num != 0) {
+            mutable_emb_reply->Add(compressValue);
+            compressValue = 0;
+        }
+    }
+//    cout<<"size:"<<g_compensate_layerid.size()<<endl;
+    reply->set_resp_featdim_size(compress_dim_size);
+}
+
+
+void gCompensateBits(const EmbMessage* request,EmbMessage* reply){
+    // no errors are compensated, however, 0-th epoch need to compute the errors
+    int epoch=request->epoch();
+    int layerid=request->layerid();
+    map<int,vector<float>> g_tmp;
+    auto &g_compensate_layerid=WorkerStore::G_compensate[layerid];
+    auto &g = WorkerStore::G_map[layerid];
+    auto min_value = WorkerStore::g_min[layerid];
+    auto max_value = WorkerStore::g_max[layerid];
+    if(epoch==0){
+        initGCompensate(layerid);
+        g_tmp=g;
+    }
+
+    if(epoch!=0){
+        // need to be compensated
+        for(int i=0;i<request->nodes_size();i++){
+            auto id= request->nodes(i);
+            auto& g_nodei=g[id];
+            auto& g_comp_nodei=g_compensate_layerid[id];
+            int size=g_nodei.size();
+            vector<float> g_nodei_tmp(size);
+            for(int j=0;j<size;j++){
+                g_nodei_tmp[j]=g_nodei[j]+g_comp_nodei[j];
+                if(g_nodei_tmp[j]>max_value){
+                    max_value=g_nodei_tmp[j];
+                }else if(g_nodei_tmp[j]<min_value){
+                    min_value=g_nodei_tmp[j];
+                }
+            }
+            if(g_tmp.count(id)==0){
+                g_tmp.insert(pair<int,vector<float>>(id,g_nodei_tmp));
+            }else{
+                g_tmp[id]=g_nodei_tmp;
+            }
+
+        }
+    }
+
+    vector<Bucket> buckets;
+    bool ifCrossZero = false;
+    int bucket_num;
+    int bitNum = request->bitnum();
+    if (max_value > 0 && min_value < 0) {
+        ifCrossZero = true;
+    }
+    if (ifCrossZero) {
+        bucket_num = pow(2, bitNum) - 2;
+    } else {
+        bucket_num = pow(2, bitNum) - 1;
+    }
+//    cout << "max_min_value:" << max_value << "," << min_value << endl;
+    reply->set_shapedim(g_tmp.begin()->second.size());
+
+    double interval = (max_value - min_value) / (double) (bucket_num);
+    int int_interval = (int) (interval * pow(10, 8));
+    int int_interval_addone = int_interval + 1;
+    interval = int_interval_addone / pow(10, 8);
+
+    if (ifCrossZero) {
+        // bucket_num是interval的个数，而不是真正的bucket number
+        int bucket_count = 0;
+        for (int i = 0; i < bucket_num; i++) {
+            // 从第0个区间开始，到bucket_num-1个区间结束,这里的i都是左编号
+            if (interval * i <= 0 && interval * (i + 1) >= 0) {
+                Bucket b_left{};
+                b_left.bid = bucket_count;
+                b_left.lower_bound = min_value + interval * i;
+                b_left.upper_bound = 0;
+                b_left.value = (b_left.lower_bound + b_left.upper_bound) / 2;
+                buckets.push_back(b_left);
+                reply->add_values(b_left.value);
+                bucket_count++;
+
+                Bucket b_right{};
+                b_right.bid = bucket_count;
+                b_right.lower_bound = 0;
+                b_right.upper_bound = min_value + interval * (i + 1);
+                b_right.value = (b_right.lower_bound + b_right.upper_bound) / 2;
+                buckets.push_back(b_right);
+                reply->add_values(b_right.value);
+                bucket_count++;
+            } else {
+                Bucket b{};
+                b.bid = bucket_count;
+                b.lower_bound = min_value + interval * i;
+                b.upper_bound = min_value + interval * (i + 1);
+                b.value = (b.lower_bound + b.upper_bound) / 2;
+                buckets.push_back(b);
+                reply->add_values(b.value);
+                bucket_count++;
+            }
+
+        }
+    } else {
+        for (int i = 0; i < bucket_num; i++) {
+            Bucket b;
+            b.bid = i;
+            b.lower_bound = min_value + interval * i;
+            b.upper_bound = min_value + interval * (i + 1);
+            b.value = (b.lower_bound + b.upper_bound) / 2;
+            buckets.push_back(b);
+            reply->add_values(b.value);
+        }
+    }
+
+    Bucket b;
+    b.bid = buckets.size();
+    b.lower_bound = 0;
+    b.upper_bound = 0;
+    b.value = 0;
+    buckets.push_back(b);
+    reply->add_values(0);
+
+    int bucketSize = buckets.size();
+    int nodeNum = request->nodes_size();
+    reply->set_resp_node_size(nodeNum);
+
+    // 开始构建压缩后的张量
+    int oneIntDimNum = 32 / bitNum;
+    vector<uint> itemsVec(oneIntDimNum);
+    int feat_size = g_tmp.begin()->second.size();
+
+    int left_num = feat_size % oneIntDimNum;
+    int compress_dim_size;
+    if (left_num == 0) {
+        compress_dim_size = feat_size / oneIntDimNum;
+    } else {
+        compress_dim_size = feat_size / oneIntDimNum + 1;
+    }
+    auto *mutable_emb_reply = reply->mutable_resp_compress_emb_concat();
+    mutable_emb_reply->Reserve(nodeNum * compress_dim_size);
+    uint compressValue = 0;
+    for (int n = 0; n < nodeNum; n++) {
+        auto id = request->nodes(n);
+        uint bucket_id;
+        auto &g_second = g_tmp[id];
+        vector<float> errors_for_noden(feat_size);
+        for (uint i = 0; i < feat_size; i++) {
+            float dim = g_second[i];
+            if (dim == 0) {
+                bucket_id = bucketSize - 1;
+            } else if (!ifCrossZero) {
+                bucket_id = (int) ((dim - min_value) / interval);
+            } else {
+                bucket_id = (int) ((dim - min_value) / interval);
+                if (dim > 0) {
+                    bucket_id += 1;
+                }
+            }
+            float dim_compress=buckets[bucket_id].value;
+            float error=dim - dim_compress;
+            errors_for_noden[i]=error;
+
+            uint itemId = i % oneIntDimNum;
+
+            compressValue = compressValue | (bucket_id << (32 - (itemId + 1) * bitNum));
+//                compressValue=0;
+
+            if (itemId == (oneIntDimNum - 1)) {
+//                    compressData_concat(bitNum, itemsVec, mutable_emb_reply);
+                mutable_emb_reply->Add(compressValue);
+                compressValue = 0;
+            }
+
+        }
+
+        unique_lock<mutex> lock1(ThreadUtil::mtx_gcompensate);
+
+        if(g_compensate_layerid.count(id)==0){
+            g_compensate_layerid.insert(pair<int,vector<float>>(id,errors_for_noden));
+        } else{
+            g_compensate_layerid[id]=errors_for_noden;
+        }
+        lock1.unlock();
+//            cout<<endl;
+        if (left_num != 0) {
+            mutable_emb_reply->Add(compressValue);
+            compressValue = 0;
+        }
+    }
+
+    reply->set_resp_featdim_size(compress_dim_size);
+}
+
+
+void compensate1BitG(const EmbMessage *request, EmbMessage *reply){
+    int epoch=request->epoch();
+    int layerid=request->layerid();
+    gCompensate1Bit(request,reply);
+}
+
+void compensateBitsG(const EmbMessage *request, EmbMessage *reply){
+    int epoch=request->epoch();
+    int layerid=request->layerid();
+    gCompensateBits(request,reply);
+    // compensate for g
+}
 
 void compress1BitEmbs(const EmbMessage *request, EmbMessage *reply) {
     // -1,1
@@ -2018,6 +2041,150 @@ void compress1BitEmbs(const EmbMessage *request, EmbMessage *reply) {
 
     reply->set_resp_featdim_size(compress_dim_size);
 }
+
+void compressBitsG(const EmbMessage *request, EmbMessage *reply) {
+    int layerid=request->layerid();
+    auto &g = WorkerStore::G_map[layerid];
+    auto min_value = WorkerStore::g_min[layerid];
+    auto max_value = WorkerStore::g_max[layerid];
+    vector<Bucket> buckets;
+    bool ifCrossZero = false;
+    int bucket_num;
+    int bitNum = request->bitnum();
+    if (max_value > 0 && min_value < 0) {
+        ifCrossZero = true;
+    }
+    if (ifCrossZero) {
+        bucket_num = pow(2, bitNum) - 2;
+    } else {
+        bucket_num = pow(2, bitNum) - 1;
+    }
+//    cout << "max_min_value:" << max_value << "," << min_value << endl;
+    reply->set_shapedim(g.begin()->second.size());
+
+    double interval = (max_value - min_value) / (double) (bucket_num);
+    int int_interval = (int) (interval * pow(10, 8));
+    int int_interval_addone = int_interval + 1;
+    interval = int_interval_addone / pow(10, 8);
+
+    if (ifCrossZero) {
+        // bucket_num是interval的个数，而不是真正的bucket number
+        int bucket_count = 0;
+        for (int i = 0; i < bucket_num; i++) {
+            // 从第0个区间开始，到bucket_num-1个区间结束,这里的i都是左编号
+            if (interval * i <= 0 && interval * (i + 1) >= 0) {
+                Bucket b_left{};
+                b_left.bid = bucket_count;
+                b_left.lower_bound = min_value + interval * i;
+                b_left.upper_bound = 0;
+                b_left.value = (b_left.lower_bound + b_left.upper_bound) / 2;
+                buckets.push_back(b_left);
+                reply->add_values(b_left.value);
+                bucket_count++;
+
+                Bucket b_right{};
+                b_right.bid = bucket_count;
+                b_right.lower_bound = 0;
+                b_right.upper_bound = min_value + interval * (i + 1);
+                b_right.value = (b_right.lower_bound + b_right.upper_bound) / 2;
+                buckets.push_back(b_right);
+                reply->add_values(b_right.value);
+                bucket_count++;
+            } else {
+                Bucket b{};
+                b.bid = bucket_count;
+                b.lower_bound = min_value + interval * i;
+                b.upper_bound = min_value + interval * (i + 1);
+                b.value = (b.lower_bound + b.upper_bound) / 2;
+                buckets.push_back(b);
+                reply->add_values(b.value);
+                bucket_count++;
+            }
+
+        }
+    } else {
+        for (int i = 0; i < bucket_num; i++) {
+            Bucket b;
+            b.bid = i;
+            b.lower_bound = min_value + interval * i;
+            b.upper_bound = min_value + interval * (i + 1);
+            b.value = (b.lower_bound + b.upper_bound) / 2;
+            buckets.push_back(b);
+            reply->add_values(b.value);
+        }
+    }
+
+    Bucket b;
+    b.bid = buckets.size();
+    b.lower_bound = 0;
+    b.upper_bound = 0;
+    b.value = 0;
+    buckets.push_back(b);
+    reply->add_values(0);
+
+    int bucketSize = buckets.size();
+    int nodeNum = request->nodes_size();
+    reply->set_resp_node_size(nodeNum);
+
+    // 开始构建压缩后的张量
+    int oneIntDimNum = 32 / bitNum;
+    vector<uint> itemsVec(oneIntDimNum);
+    int feat_size = g.begin()->second.size();
+
+    int left_num = feat_size % oneIntDimNum;
+    int compress_dim_size;
+    if (left_num == 0) {
+        compress_dim_size = feat_size / oneIntDimNum;
+    } else {
+        compress_dim_size = feat_size / oneIntDimNum + 1;
+    }
+    auto *mutable_emb_reply = reply->mutable_resp_compress_emb_concat();
+    mutable_emb_reply->Reserve(nodeNum * compress_dim_size);
+//        vector<uint> vec_emb(nodeNum*compress_dim_size);
+//        mutable_emb_reply->Add(vec_emb.begin(),vec_emb.end());
+
+//        auto& bitMap=WorkerStore::bucketPositionBitMap;
+    uint compressValue = 0;
+    for (int n = 0; n < nodeNum; n++) {
+        auto id = request->nodes(n);
+        uint bucket_id;
+        auto &g_second = g[id];
+        for (uint i = 0; i < feat_size; i++) {
+            float dim = g_second[i];
+            if (dim == 0) {
+                bucket_id = bucketSize - 1;
+            } else if (!ifCrossZero) {
+                bucket_id = (int) ((dim - min_value) / interval);
+            } else {
+                bucket_id = (int) ((dim - min_value) / interval);
+                if (dim > 0) {
+                    bucket_id += 1;
+                }
+            }
+            uint itemId = i % oneIntDimNum;
+
+            compressValue = compressValue | (bucket_id << (32 - (itemId + 1) * bitNum));
+//                compressValue=0;
+
+            if (itemId == (oneIntDimNum - 1)) {
+//                    compressData_concat(bitNum, itemsVec, mutable_emb_reply);
+                mutable_emb_reply->Add(compressValue);
+                compressValue = 0;
+            }
+
+        }
+//            cout<<endl;
+        if (left_num != 0) {
+            mutable_emb_reply->Add(compressValue);
+            compressValue = 0;
+        }
+    }
+
+    reply->set_resp_featdim_size(compress_dim_size);
+
+
+}
+
 
 void compressBitsEmbs(const EmbMessage *request, EmbMessage *reply) {
     auto &embs = WorkerStore::embs;
@@ -2169,10 +2336,10 @@ void compressEmbs(const EmbMessage *request, EmbMessage *reply) {
 
     int bitNum = request->bitnum();
 
+
     // 1-bit compression is special, which cannot be divided into 3 parts when cross zero
     if (bitNum == 1) {
         compress1BitEmbs(request, reply);
-
     } else {
         // 如果bitnum不是1，那么至少有3个（实际4个）个桶，可以包含+-0
         compressBitsEmbs(request, reply);
@@ -2181,6 +2348,30 @@ void compressEmbs(const EmbMessage *request, EmbMessage *reply) {
     // 横跨，正负优先,0随后;
     // if cross, -a,+b contains two ranges -a,0 0,+b
     // if not cross
+
+}
+
+void compressG(const EmbMessage *request, EmbMessage *reply){
+    int bitNum = request->bitnum();
+    // 1-bit compression is special, which cannot be divided into 3 parts when cross zero
+    bool ifcompensate=request->ifcompensate();
+//    cout<<"bitnum:"<<bitNum<<endl;
+
+    if(!ifcompensate){
+        if (bitNum == 1) {
+            compress1BitG(request, reply);
+        } else {
+            // 如果bitnum不是1，那么至少有3个（实际4个）个桶，可以包含+-0
+            compressBitsG(request, reply);
+        }
+    }else{
+        if (bitNum == 1) {
+            compensate1BitG(request, reply);
+        } else {
+            compensateBitsG(request,reply);
+
+        }
+    }
 
 }
 
@@ -2194,6 +2385,23 @@ Status ServiceImpl::workerPullEmbCompress(ServerContext *context, const EmbMessa
 
     compressEmbs(request, reply);
 
+    gettimeofday(&t2, NULL);
+    timeuse = t2.tv_sec - t1.tv_sec + (t2.tv_usec - t1.tv_usec) / 1000000.0;
+//    cout << "server processing time:" << timeuse << "s" << endl;
+
+
+    return Status::OK;
+
+}
+
+Status ServiceImpl::workerPullGCompress(ServerContext *context, const EmbMessage *request,
+                                          EmbMessage *reply) {
+//    clock_t start_time_total = clock();
+
+    struct timeval t1, t2;
+    double timeuse;
+    gettimeofday(&t1, NULL);
+    compressG(request, reply);
     gettimeofday(&t2, NULL);
     timeuse = t2.tv_sec - t1.tv_sec + (t2.tv_usec - t1.tv_usec) / 1000000.0;
 //    cout << "server processing time:" << timeuse << "s" << endl;
@@ -2253,30 +2461,22 @@ Status ServiceImpl::initParameter(ServerContext *context, const NetInfoMessage *
         ServerStore::feat_dim = feat_dim;
         ServerStore::class_dim = class_dim;
         ServerStore::hid_dims = hid_dims;
-
-        for (int i = 0; i < request->weights_size(); i++) {
-            int row_num = request->weights(i).weight_size();
-            int col_num = request->weights(i).weight().begin()->tensor_size();
-            vector<vector<float>> weight(row_num);
-            ServerStore::weights.insert(pair<int, vector<vector<float>>>(i, weight));
-            if (serverId == 0) {
-                int dim_num = request->bias(i).tensor_size();
-                vector<float> bias(dim_num);
-                ServerStore::bias.insert(pair<int, vector<float>>(i, bias));
-                for (int j = 0; j < dim_num; j++) {
-                    ServerStore::bias[i][j] = request->bias(i).tensor(j);
-                }
+        for(int i=0;i<request->params_size();i++){
+            int size_elem=request->params(i).elems_size();
+            vector<float> tmp(size_elem);
+            vector<float> tmp2(size_elem);
+            vector<float> tmp3(size_elem);
+            vector<float> tmp4(size_elem);
+            auto& param_i=request->params(i);
+            for(int j=0;j<size_elem;j++){
+                tmp[j]=param_i.elems(j);
             }
-
-            for (int j = 0; j < row_num; j++) {
-                vector<float> vec_tmp(col_num);
-                ServerStore::weights[i][j] = vec_tmp;
-                for (int k = 0; k < col_num; k++) {
-                    // i-th layer, j-row, k-col
-                    ServerStore::weights[i][j][k] = request->weights(i).weight(j).tensor(k);
-                }
-            }
+            ServerStore::params.insert(pair<string,vector<float>>(param_i.id(),tmp));
+            ServerStore::grads_agg.insert(pair<string,vector<float>>(param_i.id(),tmp2));
+            ServerStore::m_grads_t.insert(pair<string,vector<float>>(param_i.id(),tmp3));
+            ServerStore::v_grads_t.insert(pair<string,vector<float>>(param_i.id(),tmp4));
         }
+
 
         Check::check_initParameter_ServerStore();
 
@@ -3423,344 +3623,359 @@ Status ServiceImpl::workerPullEmbTrendSelect(
 }
 
 
-Status ServiceImpl::workerPullGCompress(ServerContext *context, const EmbMessage *request,
-                                        EmbMessage *reply) {
-    int bitNum = request->bitnum();
-    int bucket_num = pow(2, bitNum) - 2;
-//    cout<<"bucket_num:"<<bucket_num<<endl;
-    bool ifCompensate = request->ifcompensate();
-    int layerId = request->layerid();
-    int epoch = request->iterround();
-
-    // 先判断是否需要补偿
-    map<int, vector<float>> G;
-    float max_value = -10000;
-    float min_value = 10000;
+//Status ServiceImpl::workerPullGCompress(ServerContext *context, const EmbMessage *request,
+//                                        EmbMessage *reply) {
+//    int bitNum = request->bitnum();
+//    int bucket_num = pow(2, bitNum) - 2;
+////    cout<<"bucket_num:"<<bucket_num<<endl;
+//    bool ifCompensate = request->ifcompensate();
+//    int layerId = request->layerid();
+//    int epoch = request->iterround();
+//
+//
+//    // 先判断是否需要补偿
+//    map<int, vector<float>> G;
+//    float max_value = -10000;
+//    float min_value = 10000;
+//
 //    cout<<"epoch "<<epoch <<", layer id "<<layerId<< "bucket num:"<<bucket_num<< ", ifCompensate:"<<ifCompensate<<endl;
 //    cout<<"WorkerStore::G_compensate size:"<< WorkerStore::G_compensate[layerId].size()<<"*"<<WorkerStore::G_compensate[layerId].begin()->second.size()<<endl;
 //    cout<<"WorkerStore::G_map size:"<< WorkerStore::G_map[layerId].size()<<"*"<<WorkerStore::G_map[layerId].begin()->second.size()<<endl;
-
-    auto &G_layerId = WorkerStore::G_map[layerId];
-    auto &G_compensate_layerId = WorkerStore::G_compensate[layerId];
-
-    int featNum = G_layerId.begin()->second.size();
-    int nodeNum = request->nodes_size();
-    if (ifCompensate) {
-        if (epoch == 0) {
-            for (int i = 0; i < nodeNum; i++) {
-                auto id = request->nodes(i);
-                vector<float> vec(featNum);
-                auto &G_layerId_nodeId = G_layerId[id];
-                for (int j = 0; j < featNum; j++) {
-                    auto feat_dim = G_layerId_nodeId[j];
-                    vec[j] = feat_dim;
-                    // 求整个返回矩阵的元素的最大值和最小值
-                    if (feat_dim > max_value) {
-                        max_value = feat_dim;
-                    }
-                    if (feat_dim < min_value) {
-                        min_value = feat_dim;
-                    }
-                }
-                G.insert(pair<int, vector<float >>(id, vec));
-            }
-        } else {
-
-            for (int i = 0; i < nodeNum; i++) {
-                vector<float> vec(featNum);
-                auto id = request->nodes(i);
-                auto &G_layerId_nodeId = G_layerId[id];
-                auto &G_compensate_layerId_nodeId = G_compensate_layerId[id];
-                for (int j = 0; j < featNum; j++) {
-//                        cout<<"id:"<<layerId<<","<<id<<","<<i<<","<<"embs:"<<WorkerStore::embs[id][i]<<","<<"error compensate:"<<WorkerStore::embs_compensate[layerId][id][i]<<endl;
-//                        float feat_dim=WorkerStore::embs[id][i]+WorkerStore::embs_compensate[layerId][id][i];
-                    float feat_dim = G_layerId_nodeId[j] + G_compensate_layerId_nodeId[j];
+//
+//    auto &G_layerId = WorkerStore::G_map[layerId];
+//    auto &G_compensate_layerId = WorkerStore::G_compensate[layerId];
+//
+//    int featNum = G_layerId.begin()->second.size();
+//    int nodeNum = request->nodes_size();
+//    if (ifCompensate) {
+//        if (epoch == 0) {
+//            for (int i = 0; i < nodeNum; i++) {
+//                auto id = request->nodes(i);
+//                vector<float> vec(featNum);
+//                auto &G_layerId_nodeId = G_layerId[id];
+//                for (int j = 0; j < featNum; j++) {
+//                    auto feat_dim = G_layerId_nodeId[j];
+//                    vec[j] = feat_dim;
+//                    // 求整个返回矩阵的元素的最大值和最小值
+//                    if (feat_dim > max_value) {
+//                        max_value = feat_dim;
 //                    }
-
-                    vec[j] = feat_dim;
-                    // 求整个返回矩阵的元素的最大值和最小值
-                    if (feat_dim > max_value) {
-                        max_value = feat_dim;
-                    }
-                    if (feat_dim < min_value) {
-                        min_value = feat_dim;
-                    }
-                }
-
-                G.insert(pair<int, vector<float >>(id, vec));
-            }
-        }
-    } else {
-        for (int i = 0; i < nodeNum; i++) {
-            auto id = request->nodes(i);
-            vector<float> vec(featNum);
-            auto &G_layerId_nodeId = G_layerId[id];
-            for (int j = 0; j < featNum; j++) {
-                auto feat_dim = G_layerId_nodeId[j];
-                vec[j] = feat_dim;
-                // 求整个返回矩阵的元素的最大值和最小值
-                if (feat_dim > max_value) {
-                    max_value = feat_dim;
-                }
-                if (feat_dim < min_value) {
-                    min_value = feat_dim;
-                }
-            }
-
-            G.insert(pair<int, vector<float >>(id, vec));
-        }
-    }
-
-
-    // 上面是用上一轮补偿了这一轮
-    // 下面是计算压缩和发送，以及发送误差
-    vector<Bucket> buckets;
-    float interval = (max_value - min_value) / (float) (bucket_num);
-    if (min_value < 0 && max_value > 0) {
-        for (int i = 0; i < bucket_num + 1; i++) {
-            if (min_value + interval * i < 0 && min_value + interval * (i + 1) > 0) {
-                // 建两个桶,以0的分界线
-                Bucket b1;
-                b1.bid = i;
-                b1.lower_bound = min_value + interval * i;
-                b1.upper_bound = 0;
-                b1.value = (b1.lower_bound + b1.upper_bound) / 2;
-                buckets.push_back(b1);
-                reply->add_values((b1.lower_bound + b1.upper_bound) / 2);
-
-                i = i + 1;
-                Bucket b2;
-                b2.bid = i;
-                b2.lower_bound = 0;
-                b2.upper_bound = min_value + interval * (i + 1);
-                if (i == bucket_num) {
-                    b2.upper_bound = max_value;
-                }
-                b2.value = (b2.lower_bound + b2.upper_bound) / 2;
-                buckets.push_back(b2);
-                reply->add_values((b2.lower_bound + b2.upper_bound) / 2);
-            } else {
-                Bucket b;
-                b.bid = i;
-                b.lower_bound = min_value + interval * i;
-                b.upper_bound = min_value + interval * (i + 1);
-                if (i == bucket_num - 1) {
-                    b.upper_bound = max_value;
-                }
-                b.value = (b.lower_bound + b.upper_bound) / 2;
-                buckets.push_back(b);
-                reply->add_values((b.lower_bound + b.upper_bound) / 2);
-            }
-        }
-    } else {
-        for (int i = 0; i < bucket_num; i++) {
-            Bucket b;
-            b.bid = i;
-//            cout<< "bid:" << b.bid<<endl;
-            b.lower_bound = min_value + interval * i;
-            b.upper_bound = min_value + interval * (i + 1);
-            if (i == bucket_num - 1) {
-                b.upper_bound = max_value;
-            }
-            b.value = (b.lower_bound + b.upper_bound) / 2;
-            buckets.push_back(b);
-            reply->add_values((b.lower_bound + b.upper_bound) / 2);
-        }
-    }
-
-    Bucket b;
-    b.bid = buckets.size();
-    b.lower_bound = 0;
-    b.upper_bound = 0;
-    b.value = 0;
-    buckets.push_back(b);
-    reply->add_values(0);
-
-    int feat_size = G_layerId.begin()->second.size();
-    int oneIntDimNum = 32 / bitNum;
-    vector<uint> itemsVec(oneIntDimNum);
-
-    int left_num = feat_size % oneIntDimNum;
-    int compress_dim_size;
-    if (left_num == 0) {
-        compress_dim_size = feat_size / oneIntDimNum;
-    } else {
-        compress_dim_size = feat_size / oneIntDimNum + 1;
-    }
-
-    auto *mutable_reply = reply->mutable_resp_compress_emb_concat();
-    mutable_reply->Reserve(nodeNum * compress_dim_size);
-
-    if (ifCompensate) {
-        if (epoch == 0) {
-            // 第0轮迭代需要新建误差结构
-
-            for (int m = 0; m < nodeNum; m++) {
-                auto id = request->nodes(m);
-                auto &g_node = G[id];
-//                const auto &g=G[id];
-                vector<float> error(featNum);
-                for (int j = 0; j < feat_size; j++) {
-                    float dim = g_node[j];
-                    int bucket_id = getDimBucket(buckets, dim, min_value, max_value, interval);
-//                    tensor->add_tensor(bucket_id);
-                    int itemId = j % oneIntDimNum;
-                    itemsVec[itemId] = bucket_id;
-                    if (itemId == (oneIntDimNum - 1)) {
-                        compressData_concat(bitNum, itemsVec, mutable_reply);
-                    }
-
-                    error[j] = (dim - buckets[bucket_id].value);
-                }
-
-                if (left_num != 0) {
-                    uint compress_value = 0;
-                    if (bitNum == 2) {
-                        for (int i = 0; i < left_num; i++) {
-                            itemsVec[i] = itemsVec[i] << (30 - 2 * i);
-                            compress_value = compress_value | itemsVec[i];
-                        }
-                    } else if (bitNum == 4) {
-                        for (int i = 0; i < left_num; i++) {
-                            itemsVec[i] = itemsVec[i] << (28 - 4 * i);
-                            compress_value = compress_value | itemsVec[i];
-                        }
-                    } else if (bitNum == 8) {
-                        for (int i = 0; i < left_num; i++) {
-                            itemsVec[i] = itemsVec[i] << (24 - 8 * i);
-                            compress_value = compress_value | itemsVec[i];
-                        }
-                    } else if (bitNum == 16) {
-                        for (int i = 0; i < left_num; i++) {
-                            itemsVec[i] = itemsVec[i] << (16 - 16 * i);
-                            compress_value = compress_value | itemsVec[i];
-                        }
-                    }
-                    mutable_reply->Add(compress_value);
-//                    tensor->add_tensor(compress_value);
-//                    itemsVec.clear();
-                }
-                WorkerStore::G_compensate[layerId].insert(pair<int, vector<float >>(id, error));
-            }
-        } else {
-            // 需要先加误差，然后算出在哪个桶中，再算误差
-
-//            if(WorkerStore::G_compensate.count(layerId)==0){
-//                map<int,vector<float>> map_tmp;
-//                WorkerStore::G_compensate.insert(pair<int,map<int,vector<float>>>(layerId,map_tmp));
+//                    if (feat_dim < min_value) {
+//                        min_value = feat_dim;
+//                    }
+//                }
+//                G.insert(pair<int, vector<float >>(id, vec));
 //            }
-//            auto G_compensate_layerId_tmp=WorkerStore::G_compensate[layerId];
-
-
-            for (int m = 0; m < nodeNum; m++) {
-                auto id = request->nodes(m);
-                const auto &g = G[id];
-//                IntTensorMessage *tensor = reply->add_embs();
-//                tensor->set_vid(id);
-                auto &G_compensate_layerId_nodeId = G_compensate_layerId[id];
-                for (int i = 0; i < featNum; i++) {
-                    float dim = g[i];
-                    int bucket_id = getDimBucket(buckets, dim, min_value, max_value, interval);
-//                    tensor->add_tensor(bucket_id);
-//                    itemsVec.push_back(bucket_id);
-                    int itemId = i % oneIntDimNum;
-                    itemsVec[itemId] = bucket_id;
-                    if (itemId == (oneIntDimNum - 1)) {
-                        compressData_concat(bitNum, itemsVec, mutable_reply);
-                    }
-                    G_compensate_layerId_nodeId[i] = (dim - buckets[bucket_id].value);
-                }
-
-                if (left_num != 0) {
-                    uint compress_value = 0;
-                    if (bitNum == 2) {
-                        for (int i = 0; i < left_num; i++) {
-                            itemsVec[i] = itemsVec[i] << (30 - 2 * i);
-                            compress_value = compress_value | itemsVec[i];
-                        }
-                    } else if (bitNum == 4) {
-                        for (int i = 0; i < left_num; i++) {
-                            itemsVec[i] = itemsVec[i] << (28 - 4 * i);
-                            compress_value = compress_value | itemsVec[i];
-                        }
-                    } else if (bitNum == 8) {
-                        for (int i = 0; i < left_num; i++) {
-                            itemsVec[i] = itemsVec[i] << (24 - 8 * i);
-                            compress_value = compress_value | itemsVec[i];
-                        }
-                    } else if (bitNum == 16) {
-                        for (int i = 0; i < left_num; i++) {
-                            itemsVec[i] = itemsVec[i] << (16 - 16 * i);
-                            compress_value = compress_value | itemsVec[i];
-                        }
-                    }
-                    mutable_reply->Add(compress_value);
-//                    tensor->add_tensor(compress_value);
-//                    itemsVec.clear();
-                }
-
-            }
-        }
-    } else {
-
-        // 开始构建压缩后的张量
-        for (int m = 0; m < nodeNum; m++) {
-            auto id = request->nodes(m);
-            const auto &g = G[id];
-//            IntTensorMessage *tensor = reply->add_embs();
-//            tensor->set_vid(id);
-            for (int n = 0; n < featNum; n++) {
-                auto dim = g[n];
-                int bucket_id = getDimBucket(buckets, dim, min_value, max_value, interval);
-//                tensor->add_tensor(bucket_id);
-                int itemId = n % oneIntDimNum;
-                itemsVec[itemId] = bucket_id;
-                if (itemId == (oneIntDimNum - 1)) {
-                    compressData_concat(bitNum, itemsVec, mutable_reply);
-                }
-
-
-            }
-            if (left_num != 0) {
-                uint compress_value = 0;
-                if (bitNum == 2) {
-                    for (int i = 0; i < left_num; i++) {
-                        itemsVec[i] = itemsVec[i] << (30 - 2 * i);
-                        compress_value = compress_value | itemsVec[i];
-                    }
-                } else if (bitNum == 4) {
-                    for (int i = 0; i < left_num; i++) {
-                        itemsVec[i] = itemsVec[i] << (28 - 4 * i);
-                        compress_value = compress_value | itemsVec[i];
-                    }
-                } else if (bitNum == 8) {
-                    for (int i = 0; i < left_num; i++) {
-                        itemsVec[i] = itemsVec[i] << (24 - 8 * i);
-                        compress_value = compress_value | itemsVec[i];
-                    }
-                } else if (bitNum == 16) {
-                    for (int i = 0; i < left_num; i++) {
-                        itemsVec[i] = itemsVec[i] << (16 - 16 * i);
-                        compress_value = compress_value | itemsVec[i];
-                    }
-                }
-
-                mutable_reply->Add(compress_value);
-//                itemsVec.clear();
-            }
-        }
-    }
-    reply->set_resp_node_size(nodeNum);
-    reply->set_resp_featdim_size(compress_dim_size);
-    reply->set_shapedim(G_layerId.begin()->second.size());
-//    cout << "G_layerId.begin()->second.size()" << reply->shapedim() << endl;
-
-    return Status::OK;
-
-
-}
+//        } else {
+//
+//            for (int i = 0; i < nodeNum; i++) {
+//                vector<float> vec(featNum);
+//                auto id = request->nodes(i);
+//                auto &G_layerId_nodeId = G_layerId[id];
+//                auto &G_compensate_layerId_nodeId = G_compensate_layerId[id];
+//                for (int j = 0; j < featNum; j++) {
+////                        cout<<"id:"<<layerId<<","<<id<<","<<i<<","<<"embs:"<<WorkerStore::embs[id][i]<<","<<"error compensate:"<<WorkerStore::embs_compensate[layerId][id][i]<<endl;
+////                        float feat_dim=WorkerStore::embs[id][i]+WorkerStore::embs_compensate[layerId][id][i];
+//                    float feat_dim = G_layerId_nodeId[j] + G_compensate_layerId_nodeId[j];
+////                    }
+//
+//                    vec[j] = feat_dim;
+//                    // 求整个返回矩阵的元素的最大值和最小值
+//                    if (feat_dim > max_value) {
+//                        max_value = feat_dim;
+//                    }
+//                    if (feat_dim < min_value) {
+//                        min_value = feat_dim;
+//                    }
+//                }
+//
+//                G.insert(pair<int, vector<float >>(id, vec));
+//            }
+//        }
+//    } else {
+//        for (int i = 0; i < nodeNum; i++) {
+//            auto id = request->nodes(i);
+//            vector<float> vec(featNum);
+//            auto &G_layerId_nodeId = G_layerId[id];
+//            for (int j = 0; j < featNum; j++) {
+//                auto feat_dim = G_layerId_nodeId[j];
+//                vec[j] = feat_dim;
+//                // 求整个返回矩阵的元素的最大值和最小值
+//                if (feat_dim > max_value) {
+//                    max_value = feat_dim;
+//                }
+//                if (feat_dim < min_value) {
+//                    min_value = feat_dim;
+//                }
+//            }
+//
+//            G.insert(pair<int, vector<float >>(id, vec));
+//        }
+//    }
+//
+//    cout<<"max,min:"<<max_value<<","<<min_value<<endl;
+//    // 上面是用上一轮补偿了这一轮
+//    // 下面是计算压缩和发送，以及发送误差
+//    vector<Bucket> buckets;
+//    float interval = (max_value - min_value) / (float) (bucket_num);
+//    if (min_value < 0 && max_value > 0) {
+//        for (int i = 0; i < bucket_num + 1; i++) {
+//            if (min_value + interval * i < 0 && min_value + interval * (i + 1) > 0) {
+//                // 建两个桶,以0的分界线
+//                Bucket b1;
+//                b1.bid = i;
+//                b1.lower_bound = min_value + interval * i;
+//                b1.upper_bound = 0;
+//                b1.value = (b1.lower_bound + b1.upper_bound) / 2;
+//                buckets.push_back(b1);
+//                reply->add_values((b1.lower_bound + b1.upper_bound) / 2);
+//
+//                i = i + 1;
+//                Bucket b2;
+//                b2.bid = i;
+//                b2.lower_bound = 0;
+//                b2.upper_bound = min_value + interval * (i + 1);
+//                if (i == bucket_num) {
+//                    b2.upper_bound = max_value;
+//                }
+//                b2.value = (b2.lower_bound + b2.upper_bound) / 2;
+//                buckets.push_back(b2);
+//                reply->add_values((b2.lower_bound + b2.upper_bound) / 2);
+//            } else {
+//                Bucket b;
+//                b.bid = i;
+//                b.lower_bound = min_value + interval * i;
+//                b.upper_bound = min_value + interval * (i + 1);
+//                if (i == bucket_num - 1) {
+//                    b.upper_bound = max_value;
+//                }
+//                b.value = (b.lower_bound + b.upper_bound) / 2;
+//                buckets.push_back(b);
+//                reply->add_values((b.lower_bound + b.upper_bound) / 2);
+//            }
+//        }
+//    } else {
+//        for (int i = 0; i < bucket_num; i++) {
+//            Bucket b;
+//            b.bid = i;
+////            cout<< "bid:" << b.bid<<endl;
+//            b.lower_bound = min_value + interval * i;
+//            b.upper_bound = min_value + interval * (i + 1);
+//            if (i == bucket_num - 1) {
+//                b.upper_bound = max_value;
+//            }
+//            b.value = (b.lower_bound + b.upper_bound) / 2;
+//            buckets.push_back(b);
+//            reply->add_values((b.lower_bound + b.upper_bound) / 2);
+//        }
+//    }
+//
+//    Bucket b;
+//    b.bid = buckets.size();
+//    b.lower_bound = 0;
+//    b.upper_bound = 0;
+//    b.value = 0;
+//    buckets.push_back(b);
+//    reply->add_values(0);
+//
+//    int feat_size = G_layerId.begin()->second.size();
+//    int oneIntDimNum = 32 / bitNum;
+//    vector<uint> itemsVec(oneIntDimNum);
+//
+//    int left_num = feat_size % oneIntDimNum;
+//    int compress_dim_size;
+//    if (left_num == 0) {
+//        compress_dim_size = feat_size / oneIntDimNum;
+//    } else {
+//        compress_dim_size = feat_size / oneIntDimNum + 1;
+//    }
+//
+//    auto *mutable_reply = reply->mutable_resp_compress_emb_concat();
+//    mutable_reply->Reserve(nodeNum * compress_dim_size);
+//
+//    cout<<"bucket size:"<<buckets.size()<<endl;
+//
+//    if (ifCompensate) {
+//        if (epoch == 0) {
+//            // 第0轮迭代需要新建误差结构
+//
+//            for (int m = 0; m < nodeNum; m++) {
+//                auto id = request->nodes(m);
+//                auto &g_node = G[id];
+////                const auto &g=G[id];
+//                vector<float> error(featNum);
+//                for (int j = 0; j < feat_size; j++) {
+//                    float dim = g_node[j];
+//                    int bucket_id = getDimBucket(buckets, dim, min_value, max_value, interval);
+////                    tensor->add_tensor(bucket_id);
+//                    int itemId = j % oneIntDimNum;
+//                    itemsVec[itemId] = bucket_id;
+//                    if (itemId == (oneIntDimNum - 1)) {
+//                        compressData_concat(bitNum, itemsVec, mutable_reply);
+//                    }
+//
+//                    error[j] = (dim - buckets[bucket_id].value);
+//                }
+//
+//                if (left_num != 0) {
+//                    uint compress_value = 0;
+//                    if (bitNum == 2) {
+//                        for (int i = 0; i < left_num; i++) {
+//                            itemsVec[i] = itemsVec[i] << (30 - 2 * i);
+//                            compress_value = compress_value | itemsVec[i];
+//                        }
+//                    } else if (bitNum == 4) {
+//                        for (int i = 0; i < left_num; i++) {
+//                            itemsVec[i] = itemsVec[i] << (28 - 4 * i);
+//                            compress_value = compress_value | itemsVec[i];
+//                        }
+//                    } else if (bitNum == 8) {
+//                        for (int i = 0; i < left_num; i++) {
+//                            itemsVec[i] = itemsVec[i] << (24 - 8 * i);
+//                            compress_value = compress_value | itemsVec[i];
+//                        }
+//                    } else if (bitNum == 16) {
+//                        for (int i = 0; i < left_num; i++) {
+//                            itemsVec[i] = itemsVec[i] << (16 - 16 * i);
+//                            compress_value = compress_value | itemsVec[i];
+//                        }
+//                    }
+//                    mutable_reply->Add(compress_value);
+////                    tensor->add_tensor(compress_value);
+////                    itemsVec.clear();
+//                }
+//                WorkerStore::G_compensate[layerId].insert(pair<int, vector<float >>(id, error));
+//            }
+//        } else {
+//            // 需要先加误差，然后算出在哪个桶中，再算误差
+//
+////            if(WorkerStore::G_compensate.count(layerId)==0){
+////                map<int,vector<float>> map_tmp;
+////                WorkerStore::G_compensate.insert(pair<int,map<int,vector<float>>>(layerId,map_tmp));
+////            }
+////            auto G_compensate_layerId_tmp=WorkerStore::G_compensate[layerId];
+//
+//
+//            for (int m = 0; m < nodeNum; m++) {
+//                auto id = request->nodes(m);
+//                const auto &g = G[id];
+////                IntTensorMessage *tensor = reply->add_embs();
+////                tensor->set_vid(id);
+//                auto &G_compensate_layerId_nodeId = G_compensate_layerId[id];
+//                for (int i = 0; i < featNum; i++) {
+//                    float dim = g[i];
+//                    int bucket_id = getDimBucket(buckets, dim, min_value, max_value, interval);
+////                    tensor->add_tensor(bucket_id);
+////                    itemsVec.push_back(bucket_id);
+//                    int itemId = i % oneIntDimNum;
+//                    itemsVec[itemId] = bucket_id;
+//                    if (itemId == (oneIntDimNum - 1)) {
+//                        compressData_concat(bitNum, itemsVec, mutable_reply);
+//                    }
+//                    G_compensate_layerId_nodeId[i] = (dim - buckets[bucket_id].value);
+//                }
+//
+//                if (left_num != 0) {
+//                    uint compress_value = 0;
+//                    if (bitNum == 2) {
+//                        for (int i = 0; i < left_num; i++) {
+//                            itemsVec[i] = itemsVec[i] << (30 - 2 * i);
+//                            compress_value = compress_value | itemsVec[i];
+//                        }
+//                    } else if (bitNum == 4) {
+//                        for (int i = 0; i < left_num; i++) {
+//                            itemsVec[i] = itemsVec[i] << (28 - 4 * i);
+//                            compress_value = compress_value | itemsVec[i];
+//                        }
+//                    } else if (bitNum == 8) {
+//                        for (int i = 0; i < left_num; i++) {
+//                            itemsVec[i] = itemsVec[i] << (24 - 8 * i);
+//                            compress_value = compress_value | itemsVec[i];
+//                        }
+//                    } else if (bitNum == 16) {
+//                        for (int i = 0; i < left_num; i++) {
+//                            itemsVec[i] = itemsVec[i] << (16 - 16 * i);
+//                            compress_value = compress_value | itemsVec[i];
+//                        }
+//                    }
+//                    mutable_reply->Add(compress_value);
+////                    tensor->add_tensor(compress_value);
+////                    itemsVec.clear();
+//                }
+//
+//            }
+//        }
+//    } else {
+//
+//        // 开始构建压缩后的张量
+//        cout<<"compress begin"<<endl;
+//        for (int m = 0; m < nodeNum; m++) {
+//            auto id = request->nodes(m);
+////            cout<<"1"<<endl;
+//            const auto &g = G[id];
+////            cout<<"2"<<endl;
+////            IntTensorMessage *tensor = reply->add_embs();
+////            tensor->set_vid(id);
+//            for (int n = 0; n < featNum; n++) {
+////                cout<<"3"<<endl;
+//                auto dim = g[n];
+////                cout<<"4"<<endl;
+//                int bucket_id = getDimBucket(buckets, dim, min_value, max_value, interval);
+////                cout<<"5"<<endl;
+////                tensor->add_tensor(bucket_id);
+//                int itemId = n % oneIntDimNum;
+//                itemsVec[itemId] = bucket_id;
+//                if (itemId == (oneIntDimNum - 1)) {
+////                    cout<<"6"<<endl;
+//                    compressData_concat(bitNum, itemsVec, mutable_reply);
+////                    cout<<"7"<<endl;
+//                }
+//
+//
+//            }
+//            if (left_num != 0) {
+////                cout<<"8"<<endl;
+//                uint compress_value = 0;
+//                if (bitNum == 2) {
+//                    for (int i = 0; i < left_num; i++) {
+//                        itemsVec[i] = itemsVec[i] << (30 - 2 * i);
+//                        compress_value = compress_value | itemsVec[i];
+//                    }
+//                } else if (bitNum == 4) {
+//                    for (int i = 0; i < left_num; i++) {
+//                        itemsVec[i] = itemsVec[i] << (28 - 4 * i);
+//                        compress_value = compress_value | itemsVec[i];
+//                    }
+//                } else if (bitNum == 8) {
+//                    for (int i = 0; i < left_num; i++) {
+//                        itemsVec[i] = itemsVec[i] << (24 - 8 * i);
+//                        compress_value = compress_value | itemsVec[i];
+//                    }
+//                } else if (bitNum == 16) {
+//                    for (int i = 0; i < left_num; i++) {
+//                        itemsVec[i] = itemsVec[i] << (16 - 16 * i);
+//                        compress_value = compress_value | itemsVec[i];
+//                    }
+//                }
+////                cout<<"9 "<<endl;
+//                mutable_reply->Add(compress_value);
+////                itemsVec.clear();
+//            }
+//        }
+////        cout<<"compress end"<<endl;
+//    }
+//    reply->set_resp_node_size(nodeNum);
+//    reply->set_resp_featdim_size(compress_dim_size);
+//    reply->set_shapedim(G_layerId.begin()->second.size());
+////    cout << "G_layerId.begin()->second.size()" << reply->shapedim() << endl;
+//
+//    return Status::OK;
+//
+//
+//}
 
 Status ServiceImpl::workerSendTrainNode(ServerContext *context, const NodeMessage *request, BoolMessage *reply) {
+    unique_lock<mutex> lck(ThreadUtil::mtx_sendNode);
     for (int i = 0; i < request->nodes_size(); i++) {
         int n = request->nodes(i);
         ServerStore::train_nodes.push_back(n);
@@ -3777,7 +3992,7 @@ Status ServiceImpl::serverSendTrainNode(ServerContext *context, const ContextMes
 }
 
 Status ServiceImpl::workerSendValNode(ServerContext *context, const NodeMessage *request, BoolMessage *reply) {
-    ;
+    unique_lock<mutex> lck(ThreadUtil::mtx_sendNode);
     for (int i = 0; i < request->nodes_size(); i++) {
         int n = request->nodes(i);
         ServerStore::val_nodes.push_back(n);
@@ -3794,7 +4009,7 @@ Status ServiceImpl::serverSendValNode(ServerContext *context, const ContextMessa
 }
 
 Status ServiceImpl::workerSendTestNode(ServerContext *context, const NodeMessage *request, BoolMessage *reply) {
-    ;
+    unique_lock<mutex> lck(ThreadUtil::mtx_sendNode);
     for (int i = 0; i < request->nodes_size(); i++) {
         int n = request->nodes(i);
         ServerStore::test_nodes.push_back(n);
@@ -3807,5 +4022,166 @@ Status ServiceImpl::serverSendTestNode(ServerContext *context, const ContextMess
     for (int n : train_nodes) {
         reply->add_nodes(n);
     }
+    return Status::OK;
+}
+
+Status ServiceImpl::server_PullParams(ServerContext *context,const StringM *request, Param* reply){
+    const string& lay_id=request->value();
+    reply->mutable_elems()->Add(ServerStore::params[lay_id].begin(),ServerStore::params[lay_id].end());
+    return Status::OK;
+}
+
+Status ServiceImpl::server_updateModels(ServerContext *context, const GradMessage* request, BoolMessage *reply){
+    if (request->wid() == 0) {
+        unique_lock<mutex> lck(ThreadUtil::mtx_updateModels);
+        ServerStore::grads_agg[request->grad().id()].clear();
+        // vector is initialized as 0 by default
+        vector<float> tmp(request->grad().elems_size());
+        ServerStore::grads_agg[request->grad().id()]=tmp;
+        cout<<"********server_updateModels-clear gradient aggregations******"<<endl;
+        ThreadUtil::ready_updateModels = true;
+        ThreadUtil::cv_updateModels.notify_all();
+    } else {
+        unique_lock<mutex> lck(ThreadUtil::mtx_updateModels);
+        while (!ThreadUtil::ready_updateModels) {
+            ThreadUtil::cv_updateModels.wait(lck);
+        }
+    }
+    int grad_size=request->grad().elems_size();
+    string grad_id=request->grad().id();
+    float alpha = request->lr();
+    int wid=request->wid();
+
+    // 多个worker一起更新参数，先聚合所有worker的梯度
+    // 聚合worker的梯度时，先上锁
+//    pthread_mutex_lock(&ThreadUtil::mtx_updateModels_addGrad);
+    unique_lock<mutex> lck(ThreadUtil::mtx_updateModels);
+
+    auto& grad_agg=ServerStore::grads_agg[grad_id];
+    // add gradients to grads_agg
+    for(int i=0;i<grad_size;i++){
+        grad_agg[i]+=grad_agg[i]+request->grad().elems(i);
+    }
+    cout<<"********server_updateModels----gradient aggregating end******"<<endl;
+    lck.unlock();
+
+    // 每个worker累积完梯度就可以释放锁了
+//    pthread_mutex_unlock(&ThreadUtil::mtx_updateModels_addGrad);
+
+    // 有一个线程更新参数,更新参数的前提是所有梯度都已聚合完成
+    // 确保所有机器都已到达
+
+    lck.lock();
+    ThreadUtil::count_worker_for_updateModels++;
+    if (ThreadUtil::count_worker_for_updateModels == ServerStore::worker_num) {
+        ThreadUtil::cv_updateModels.notify_all();
+        ThreadUtil::count_worker_for_updateModels = 0;
+        ThreadUtil::ready_updateModels = false;
+    } else {
+        ThreadUtil::cv_updateModels.wait(lck);
+    }
+
+    // 下面是做check
+    if (wid == 0) {
+        cout<<ThreadUtil::count_worker_for_updateModels<<" workers have been added into the gradient aggregations!"<<endl;
+        cout<<"param id:"<<grad_id<<","<<"grad size:"<<grad_agg.size()<<endl;
+    }
+
+    // worker 0线程开始负责更新参数
+    if (wid == 0) {
+        ServerStore::t++;
+        float beta_1 = 0.9;
+        float beta_2 = 0.999;
+        float epsilon = 5e-4;
+        bool isAdam = true;
+        auto& m_grads_t=ServerStore::m_grads_t[grad_id];
+        auto& v_grads_t=ServerStore::v_grads_t[grad_id];
+        auto& param=ServerStore::params[grad_id];
+        // 如果m_weight_t,v_weight_t,m_bias_t,v_bias_t为空，那么初始化
+        for(int i=0;i<grad_size;i++){
+            float g_t=grad_agg[i];
+            if(isAdam){
+                m_grads_t[i]=beta_1* m_grads_t[i]+(1-beta_1)*g_t;
+                v_grads_t[i]=beta_2*v_grads_t[i]+(1-beta_2)*g_t*g_t;
+                float m_cap=m_grads_t[i]/(1-(pow(beta_1,ServerStore::t)));
+                float v_cap=v_grads_t[i]/(1-(pow(beta_2,ServerStore::t)));
+                param[i]-=(alpha*m_cap)/(sqrt(v_cap)+epsilon);
+            }else{
+                param[i]-=alpha*g_t;
+            }
+        }
+
+
+    }
+
+
+    return Status::OK;
+}
+
+
+Status ServiceImpl::server_aggGrad(ServerContext *context, const GradMessage *request, GradMessage *reply) {
+    // fix the adam
+    if (request->wid() == 0) {
+        unique_lock<mutex> lck(ThreadUtil::mtx_updateModels);
+        ServerStore::grads_agg[request->grad().id()].clear();
+        // vector is initialized as 0 by default
+        vector<float> tmp(request->grad().elems_size());
+        ServerStore::grads_agg[request->grad().id()] = tmp;
+        cout << "********server_updateModels-clear gradient aggregations******" << endl;
+        ThreadUtil::ready_updateModels = true;
+        ThreadUtil::cv_updateModels.notify_all();
+    } else {
+        unique_lock<mutex> lck(ThreadUtil::mtx_updateModels);
+        while (!ThreadUtil::ready_updateModels) {
+            ThreadUtil::cv_updateModels.wait(lck);
+        }
+    }
+    int grad_size = request->grad().elems_size();
+    string grad_id = request->grad().id();
+    float alpha = request->lr();
+    int wid = request->wid();
+
+    // 多个worker一起更新参数，先聚合所有worker的梯度
+    // 聚合worker的梯度时，先上锁
+//    pthread_mutex_lock(&ThreadUtil::mtx_updateModels_addGrad);
+    unique_lock<mutex> lck(ThreadUtil::mtx_updateModels);
+
+    auto &grad_agg = ServerStore::grads_agg[grad_id];
+    // add gradients to grads_agg
+    for (int i = 0; i < grad_size; i++) {
+        grad_agg[i] += grad_agg[i] + request->grad().elems(i);
+    }
+    cout << "********server_updateModels----gradient aggregating end******" << endl;
+    lck.unlock();
+
+    // 每个worker累积完梯度就可以释放锁了
+//    pthread_mutex_unlock(&ThreadUtil::mtx_updateModels_addGrad);
+
+    // 有一个线程更新参数,更新参数的前提是所有梯度都已聚合完成
+    // 确保所有机器都已到达
+
+    lck.lock();
+    ThreadUtil::count_worker_for_updateModels++;
+    if (ThreadUtil::count_worker_for_updateModels == ServerStore::worker_num) {
+        ThreadUtil::cv_updateModels.notify_all();
+        ThreadUtil::count_worker_for_updateModels = 0;
+        ThreadUtil::ready_updateModels = false;
+    } else {
+        ThreadUtil::cv_updateModels.wait(lck);
+    }
+
+    // 下面是做check
+    if (wid == 0) {
+        cout << ThreadUtil::count_worker_for_updateModels << " workers have been added into the gradient aggregations!"
+             << endl;
+        cout << "param id:" << grad_id << "," << "grad size:" << grad_agg.size() << endl;
+    }
+
+
+    auto* grad_message_tmp=reply->grad().New();
+    grad_message_tmp->mutable_elems()->Add(grad_agg.begin(),grad_agg.end());
+    grad_message_tmp->set_id(grad_id);
+    reply->set_allocated_grad(grad_message_tmp);
+
     return Status::OK;
 }

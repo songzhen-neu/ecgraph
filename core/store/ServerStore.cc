@@ -28,13 +28,14 @@ float ServerStore::test_f1_accuracy=0;
 vector<int> ServerStore::train_nodes;
 vector<int> ServerStore::val_nodes;
 vector<int> ServerStore::test_nodes;
+map<string,vector<float>> ServerStore::params;
+map<string,vector<float>> ServerStore::grads_agg;
+map<string,vector<float>> ServerStore::m_grads_t;
+map<string,vector<float>> ServerStore::v_grads_t;
 
 void ServerStore::initParams(const int &workerN,const int &serverN,const int & fd,const int & cd,const vector<int> &hd) {
     ServerStore::worker_num=workerN;
     ServerStore::server_num=serverN;
-
-
-
     ServerStore::feat_dim=fd;
     ServerStore::class_dim=cd;
     ServerStore::hid_dims=hd;

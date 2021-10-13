@@ -13,7 +13,7 @@ from cmake.build.example2 import *
 import time
 
 
-# from dist_gcn.dist_start import dgnnServerRouter
+# from dist_gcn_agg_grad.dist_start import dgnnServerRouter
 
 
 
@@ -71,16 +71,16 @@ class GraphConvolution(nn.Module):
         # min1=torch.min(input)
         # print("max:{0},min{1}:".format(max1,min1))
         # 更新自身weights和bias
-        weights=[]
-        bias=[]
-        for i in range(context.glContext.config['server_num']):
-            weights.extend(context.glContext.dgnnServerRouter[i].server_PullParams('w'+str(self.layer_id)))
-            bias.extend(context.glContext.dgnnServerRouter[i].server_PullParams('b'+str(self.layer_id)))
-
-
-
-        self.weight.data = torch.FloatTensor(weights).reshape(self.in_features,self.out_features)
-        self.bias.data = torch.FloatTensor(bias).reshape(self.out_features)
+        # weights=[]
+        # bias=[]
+        # for i in range(context.glContext.config['server_num']):
+        #     weights.extend(context.glContext.dgnnServerRouter[i].server_PullParams('w'+str(self.layer_id)))
+        #     bias.extend(context.glContext.dgnnServerRouter[i].server_PullParams('b'+str(self.layer_id)))
+        #
+        #
+        #
+        # self.weight.data = torch.FloatTensor(weights).reshape(self.in_features,self.out_features)
+        # self.bias.data = torch.FloatTensor(bias).reshape(self.out_features)
 
 
         # 将support设置到dgnnClient里,需要转成原index,slow

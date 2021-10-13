@@ -52,6 +52,9 @@ using dgnn_test::SmallMessage;
 using dgnn_test::RespEmbSparseMessage;
 using dgnn_test::ByteTensorMessage;
 using dgnn_test::TensorMessage;
+using dgnn_test::StringM;
+using dgnn_test::Param;
+using dgnn_test::GradMessage;
 
 
 
@@ -73,7 +76,7 @@ public:
 
     void initParameter(const int &worker_num,const int &server_num,const int &feat_dim,
                        const vector<int> &hid_dims,const int &class_dim,const int &wid,
-                       map<int,vector<vector<float>>> &weights, map<int,vector<vector<float>>> &bias);
+                       map<string, vector<float>> &weights);
 
     void startClientServer();
 
@@ -161,6 +164,8 @@ public:
     void worker_setEmbs(const map<int,vector<float>> &embMap);
 
     void sendAndUpdateModels( int worker_id, int server_id,map<int,vector<vector<float>>> &weight_grads, map<int,vector<float>> &bia_grads,float lr);
+    void server_updateModels( int worker_id, int server_id,float lr,const string& key, py::array_t<float>& grad);
+
 
     void testVariant();
     void test1Bit();
@@ -173,7 +178,7 @@ public:
     static void deCompressTotal( int bitNum,int localId,int localNodeSize,
                            vector<EmbMessage> &reply, float *ptr_result,map<int,int>& oldToNewMap,vector<vector<int>> &nodes);
 
-    void setG(const map<int,vector<float>> &g,int id);
+    void setG(const map<int,vector<float>> &g,int id,double max_v,double min_v);
     py::array_t<float> worker_pull_needed_G(py::array_t<int>& needed_G_set,int layerId);
     py::array_t<float> worker_pull_needed_G_compress(py::array_t<int>& needed_G_set,
                                                      bool ifCompensate,int layerId,int epoch,int bitNum);
@@ -181,7 +186,8 @@ public:
 //    static void* worker_pull_emb_trend_parallel(void* metaData_void);
     static void* worker_pull_emb_trend_parallel_select(void* metaData_void);
 //    py::array_t<float> worker_pull_needed_emb_compress_iter(py::array_t<int>& needed_G_set,bool ifCompensate,int layerId,int epoch,int bucketNum);
-
+    static void* worker_pull_g_parallel(void* metaData_void);
+    static void* worker_pull_g_compress_parallel(void* metaData_void);
     void set_embs(const map<int, vector<float>> &embMap);
     map<int,vector<float>> get_embs();
 
@@ -200,6 +206,9 @@ public:
     void sendTestNode(int worker_id, py::array_t<int> list);
     py::array_t<int> pullTestNode();
 
+    py::array_t<float> server_PullParams(const string& param_id);
+
+    py::array_t<float> server_aggGrad(int worker_id, int server_id,float lr,const string& key, py::array_t<float>& grad);
 
 
 //    void set_embs_byNumply()
@@ -217,6 +226,7 @@ struct ReqEmbsMetaData{
     int trend{};
     int localNodeSize{};
     int feat_num{};
+    int ifCompensate{};
     float* ptr_result{};
     map<int,int>* oldToNewMap{};
     EmbMessage* reply{};

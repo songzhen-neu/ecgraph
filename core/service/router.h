@@ -25,6 +25,10 @@ public:
              map<int,int> &oldToNewMap,int workerNum,int localNodeSize,
              bool ifCompress,int layerNum,int bitNum,bool isChangeRate,bool isTrain,int trend,int feat_num,string changeRateMode);
     float get_comp_percent(int dataNum,int layerNum);
+    py::array_t<float> getG(vector<vector<int>> &nodes,int layerId,
+                            int localId, int workerNum,
+                            bool ifCompress, bool ifcompensate,
+                            int bitNum, map<int, int> &oldToNewMap, int localNodeSize,int g_size,int epoch);
 
 };
 

@@ -20,6 +20,8 @@ public:
     static void addone(int &count);
     static int arrived_worker_num;
 
+    static mutex mtx_sendNode;
+
     static mutex mtx_barrier;
     static condition_variable cv_barrier;
     static int count_worker_for_barrier;
@@ -38,6 +40,8 @@ public:
     static int count_accuracy;
     static mutex mtx_accuracy;
     static condition_variable cv_accuracy; // 全局条件变量.
+
+    static mutex mtx_gcompensate;
 
 
 

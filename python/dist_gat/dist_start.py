@@ -28,7 +28,7 @@ import util_python.param_util as pu
 from cmake.build.example2 import *
 from context import context
 
-from dist_gcn.models import GCN
+from dist_gat.models import GAT
 # import autograd.autograd as atg
 import autograd.autograd_new as autoG
 from util_python import data_trans as dt
@@ -316,24 +316,16 @@ if __name__ == "__main__":
         activation = [F.relu, F.relu, F.relu, F.relu, F.relu, F.relu]  # 第0个激活层没用到
         autograd.set_activation(activation)
         # assign parameter
-        model = GCN(nfeat=context.glContext.config['feature_dim'],
+        model = GAT(nfeat=context.glContext.config['feature_dim'],
                     nhid=context.glContext.config['hidden'],
                     nclass=context.glContext.config['class_num'],
+                    nb_heads=context.glContext.config['nb_heads'],
+                    alpha=context.glContext.config['alpha'],
                     dropout=0.5, autograd=autograd)
 
-        if context.glContext.config['id'] == 0:
-            pu.assignParam()
-            for i in range(context.glContext.config['server_num']):
-                context.glContext.dgnnServerRouter[i].initParameter(
-                    context.glContext.config['worker_num'],
-                    context.glContext.config['server_num'],
-                    context.glContext.config['feature_dim'],
-                    context.glContext.config['hidden'],
-                    context.glContext.config['class_num'],
-                    id,
-                    context.glContext.weightForServer[i],
-                    context.glContext.bias
-                )
+
+        pu.assignParam()
+
 
         context.glContext.dgnnClient.initCompressBitMap(context.glContext.config['bitNum'])
         context.glContext.dgnnServerRouter[0].server_Barrier(0)

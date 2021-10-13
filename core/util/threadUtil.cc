@@ -10,6 +10,10 @@ bool ThreadUtil::ready= false;
 condition_variable ThreadUtil::cv;
 int ThreadUtil::arrived_worker_num=0;
 
+mutex ThreadUtil::mtx_sendNode;
+
+mutex ThreadUtil::mtx_gcompensate;
+
 mutex ThreadUtil::mtx_initParameter;
 bool ThreadUtil::ready_initParameter= false;
 

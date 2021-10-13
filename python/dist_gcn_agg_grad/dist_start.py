@@ -21,13 +21,14 @@ import torch.nn.functional as F
 import scipy.sparse as sp
 import context.store as store
 import util_python.param_util as pu
+import torch.optim as optim
 
 # example2=ctypes.CDLL('../../cmake/build/example2.cpython-36m-x86_64-linux-gnu.so')
 
 from cmake.build.example2 import *
 from context import context
 
-from dist_gcn.models import GCN
+from dist_gcn_agg_grad.models import GCN
 # import autograd.autograd as atg
 import autograd.autograd_new as autoG
 from util_python import data_trans as dt
@@ -77,6 +78,45 @@ def get_adjs_train(agg_node, adjs, nodes, ll):
     return adjs_train
 
 
+def getGlobalGrad():
+    server_num = context.glContext.config['server_num']
+    layer_num = context.glContext.config['layerNum']
+    agg_grad = {}
+    for key in context.glContext.gradients:
+        num_g = int(len(context.glContext.gradients[key]) / server_num)
+        agg_grad[key] = []
+        for sid in range(server_num):
+            if sid == server_num - 1:
+                agg_grad[key].extend(
+                    context.glContext.dgnnServerRouter[sid].server_aggGrad(context.glContext.config['id'], sid,
+                                                                           context.glContext.config['lr'],
+                                                                           key,
+                                                                           context.glContext.gradients[key][
+                                                                           sid * num_g:]))
+
+            else:
+                agg_grad[key].extend(
+                    context.glContext.dgnnServerRouter[sid].server_aggGrad(context.glContext.config['id'], sid,
+                                                                           context.glContext.config['lr'],
+                                                                           key,
+                                                                           context.glContext.gradients[key][
+                                                                           sid * num_g:(sid + 1) * num_g]))
+
+    feat_size = context.glContext.config['feature_dim']
+    class_num = context.glContext.config['class_num']
+    hidden = context.glContext.config['hidden']
+    for i in range(layer_num):
+        if i == 0:
+            model.gc[i].weight.grad.data = torch.FloatTensor(agg_grad['w' + str(i)]).reshape(feat_size, hidden[0])
+            model.gc[i].bias.grad.data = torch.FloatTensor(agg_grad['b' + str(i)]).reshape(hidden[0])
+        elif i == layer_num - 1:
+            model.gc[i].weight.grad.data = torch.FloatTensor(agg_grad['w' + str(i)]).reshape(hidden[-1], class_num)
+            model.gc[i].bias.grad.data = torch.FloatTensor(agg_grad['b' + str(i)]).reshape(class_num)
+        else:
+            model.gc[i].weight.grad.data = torch.FloatTensor(agg_grad['w' + str(i)]).reshape(hidden[i - 1], hidden[i])
+            model.gc[i].bias.grad.data = torch.FloatTensor(agg_grad['b' + str(i)]).reshape(hidden[i])
+
+
 def run_gnn(dgnnClient, model):
     # 从远程获取顶点信息（主要是边缘顶点一阶邻居信息）后，在本地进行传播
     # features, adjs, labels are based on the order of new id, and these only contains the local nodes
@@ -96,8 +136,9 @@ def run_gnn(dgnnClient, model):
     graph_full = data['graph_full']
     graph_train = data['graph_train']
 
-    # change add
-    # adjs_train = get_adjs_train(agg_node[1], adjs, nodes,  len(id_old2new_map))
+    laynum = context.glContext.config["layerNum"]
+    server_num = context.glContext.config['server_num']
+    optimizer = optim.Adam(model.parameters(), lr=context.glContext.config['lr'], weight_decay=5e-4)
 
     edges = []
     # 从adj中解析出edge
@@ -139,6 +180,7 @@ def run_gnn(dgnnClient, model):
     timeList = []
     for epoch in range(context.glContext.config['iterNum']):
         startTimeTotle = time.time()
+        optimizer.zero_grad()
         model.train()
         store.isTrain = True
         if ifCompress:
@@ -164,6 +206,9 @@ def run_gnn(dgnnClient, model):
         # acc_train = metric.accuracy(output[idx_train], labels[idx_train])  # 计算准确率
 
         loss_train.backward()  # 反向求导  Back Propagation
+        # grad_nll=ecgraph.BackWard.NllLossBackward(output,graph_train.label)
+        # grad_softmax=ecgraph.BackWard.LogSoftmaxBackward(autograd.softmax_value,grad_nll)
+        # autograd.Z[laynum].grad.data=grad_softmax
 
         # 需要准确的反向传播过程
         autograd.back_prop_detail(dgnnClient, model, graph_train.id_new2old_dict, graph_train.train_vertices, epoch,
@@ -172,7 +217,6 @@ def run_gnn(dgnnClient, model):
         # a=model.gc1.weight.grad
         # 将权重梯度和偏移梯度分别转化成map<int,vector<vector<float>>>和map<int,vector<float>>
 
-        laynum = context.glContext.config["layerNum"]
         for i in range(laynum):
             context.glContext.gradients['w' + str(i)] = model.gc[i].weight.grad.detach().flatten().numpy().tolist()
             context.glContext.gradients['b' + str(i)] = model.gc[i].bias.grad.detach().flatten().numpy().tolist()
@@ -181,23 +225,9 @@ def run_gnn(dgnnClient, model):
         # print("other time:{0}".format(end_othertime - start_othertime))
 
         start = time.time()
-        # dimList = []
-        # dimList.append(context.glContext.config['feature_dim'])
-        # for i in range(context.glContext.config['layerNum'] - 1):
-        #     dimList.append(context.glContext.config['hidden'][i])
 
-        server_num = context.glContext.config['server_num']
-        for key in context.glContext.gradients:
-            num_g=int(len(context.glContext.gradients[key])/server_num)
-            for sid in range(server_num):
-                if sid==server_num-1:
-                    context.glContext.dgnnServerRouter[sid].server_updateModels(context.glContext.config['id'],sid,context.glContext.config['lr'],
-                                                                       key,context.glContext.gradients[key][sid*num_g:])
-                else:
-                    context.glContext.dgnnServerRouter[sid].server_updateModels(context.glContext.config['id'],sid,context.glContext.config['lr'],
-                                                                      key,context.glContext.gradients[key][sid*num_g:(sid+1)*num_g])
-
-
+        getGlobalGrad()
+        optimizer.step()
 
         # 返回参数后同步,这里barrier的参数暂时没有用到
         context.glContext.dgnnServerRouter[0].server_Barrier(0)
@@ -236,7 +266,6 @@ def run_gnn(dgnnClient, model):
                                output[idx_test].detach().numpy().argmax(axis=1),
                                average='micro')
 
-
             train_datanum_entire = int(train_ratio * context.glContext.config['data_num'])
             val_datanum_entire = int(val_ratio * context.glContext.config['data_num'])
             test_datanum_entire = int(test_ratio * context.glContext.config['data_num'])
@@ -253,7 +282,7 @@ def run_gnn(dgnnClient, model):
                   "epoch_iter_time: {0}".format(endTimeTotle - startTimeTotle),
                   "avg_iter_time: {0}".format(np.array(timeList).sum(axis=0) / len(timeList)))
 
-            print('acc_test:{:.4f}'.format(acc_test))
+            # print('acc_test:{:.4f}'.format(acc_test))
 
     # context.glContext.config['ifCompress'] = False
     # store.isTrain = False
@@ -283,7 +312,6 @@ if __name__ == "__main__":
                     nhid=context.glContext.config['hidden'],
                     nclass=context.glContext.config['class_num'],
                     dropout=0.5, autograd=autograd)
-
 
         pu.assignParam()
         context.glContext.dgnnClient.initCompressBitMap(context.glContext.config['bitNum'])

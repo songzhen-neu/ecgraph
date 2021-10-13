@@ -23,6 +23,7 @@ class AutoGrad(object):
     bias = []
     activation = []
     layer_num = 0
+    softmax_value=None
 
     def __init__(self):
         self.layer_num = context.glContext.config['layerNum']
@@ -43,16 +44,16 @@ class AutoGrad(object):
     def set_activation(self, activation):
         self.activation = activation
 
-    def forward_detail_layer(self, model, x, adj, nodes, epoch, weight, bias, layer,graph):
-        x = model.gc[layer](x, adj, nodes, epoch, weight[layer-1], bias[layer-1], self,graph)
-        if layer == self.layer_num:
-            self.Z[layer] = x
+    def forward_detail_layer(self, model, x, adj, nodes, epoch, layer,graph):
+        x = model.gc[layer](x, adj, nodes, epoch, self,graph)
+        if layer == self.layer_num-1:
+            self.Z[layer+1] = x
             return x
 
         x = F.normalize(x, p=2, dim=1) # 是否每层都需要
-        self.Z[layer] = x
+        self.Z[layer+1] = x
         x = self.Active(x, layer)
-        self.H[layer] = x
+        self.H[layer+1] = x
         return x
 
     def Active(self, x, layer):
@@ -77,9 +78,9 @@ class AutoGrad(object):
         elif(act == None):
             return
 
-    def forward_detail(self, model, x, adj, nodes, epoch, weight, bias,graph):
-        for i in range(1, self.layer_num+1):
-            x = self.forward_detail_layer(model, x, adj, nodes, epoch, weight, bias, i,graph)
+    def forward_detail(self, model, x, adj, nodes, epoch,graph):
+        for i in range(0, self.layer_num):
+            x = self.forward_detail_layer(model, x, adj, nodes, epoch, i,graph)
 
         # 是否所有的层都要经过 x = F.normalize(x, p=2, dim=1)?
         # x = model.gc[self.layer_num](x, adj, nodes, epoch, weight[self.layer_num-1], bias[self.layer_num-1],self)
@@ -97,26 +98,29 @@ class AutoGrad(object):
             # pullNeighborG 代码应该进行修改
             ra.pullNeighborG(self, nodes, epoch, lay_id+1,graph)
             a = torch.spmm(adjs, self.G[lay_id+1])
-            b = torch.mm(a, model.gc[lay_id+1].weight.t())
+            b = torch.mm(a, model.gc[lay_id].weight.t())
             self.G[lay_id] = torch.mul(b, self.sigma_z_grad[lay_id])
             self.Y[lay_id-1] = torch.mm(self.A_X_H[lay_id-1].t(), self.G[lay_id])
             self.B[lay_id-1] = self.G[lay_id].detach().numpy().sum(axis=0)
 
         if lay_id != 1:
-            G_list = self.G[lay_id].detach().numpy().tolist()
+            G_list = self.G[lay_id].detach().numpy()
+            max_v=G_list.max()
+            min_v=G_list.min()
+            G_list=G_list.tolist()
             G_dict = {}
             for j in range(len(G_list)):
                 G_dict[id_new2old_map[j]] = G_list[j]
-            dgnnClient.setG(G_dict, lay_id)
+            dgnnClient.setG(G_dict, lay_id, max_v,min_v)
 
     def back_prop_detail(self, dgnnClient, model, id_new2old_map, nodes, epoch, adjs,graph):
         for i in range(self.layer_num, 0, -1):
             self.back_prop_detail_layer(i, model, epoch, nodes, adjs , dgnnClient, id_new2old_map,graph)
 
         np.set_printoptions(threshold=sys.maxsize)
-        for i in range(1, self.layer_num+1):
-            model.gc[i].weight.grad.data = self.Y[i-1]
-            model.gc[i].bias.grad.data = torch.FloatTensor(self.B[i-1])
+        for i in range(0, self.layer_num):
+            model.gc[i].weight.grad.data = self.Y[i]
+            model.gc[i].bias.grad.data = torch.FloatTensor(self.B[i])
 
     def set_HZ(self, output, required_grad, if_retain_grad, x):
         self.H[x] = output

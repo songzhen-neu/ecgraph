@@ -40,6 +40,21 @@ service DgnnProtoService{
   rpc serverSendValNode(ContextMessage) returns(NodeMessage){}
   rpc workerSendTestNode(NodeMessage) returns(BoolMessage){}
   rpc serverSendTestNode(ContextMessage) returns(NodeMessage){}
+  rpc server_PullParams(StringM) returns(Param){};
+  rpc server_updateModels(GradMessage) returns(BoolMessage){};
+  rpc server_aggGrad(GradMessage) returns (GradMessage){};
+}
+
+message StringM{
+  string value=1;
+}
+
+message GradMessage{
+  int32 wid=1;
+  int32 sid=2;
+  float lr=3;
+  Param grad=4;
+
 }
 
 message AccuracyMessage{
@@ -145,6 +160,7 @@ message TestVMessage{
 }
 
 message GradientMessage{
+  // abort
   int32 worker_id=1;
   repeated WeightsAndBiasMessage grads=2;
   float lr=3;
@@ -180,7 +196,12 @@ message NetInfoMessage{
   int32 serverNum=6;
   repeated WeightMessage weights=7;
   repeated TensorMessage bias=8;
+  repeated Param params=9;
+}
 
+message Param{
+    string id=1;
+    repeated float elems=2;
 }
 
 message WeightMessage{

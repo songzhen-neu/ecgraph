@@ -1,22 +1,29 @@
 import context.context as context
 
 def assignParam():
-    serverNum = context.glContext.config['server_num']
-    for j in range(serverNum):
-        context.glContext.weightForServer[j] = {}
-        for i in range(context.glContext.config['layerNum']):
-            context.glContext.weightForServer[j][i] = []
+    if context.glContext.config['id'] == 0:
+        serverNum = context.glContext.config['server_num']
+        parameters=context.glContext.parameters
+        parametersForServer=context.glContext.parametersForServer
 
-    for i in range(context.glContext.config['layerNum']):
-        weight = context.glContext.weights[i].detach().numpy()
-        # weight=weight.tolist()
-        context.glContext.bias[i] = context.glContext.bias[i].detach().numpy().tolist()
-        rowDim = len(weight)
-        colDim = len(weight[0])
-        for j in range(serverNum):
-            if j == (serverNum - 1):
-                context.glContext.weightForServer[j][i] = weight[int(rowDim / serverNum) * (serverNum - 1):, :].tolist()
-            else:
-                context.glContext.weightForServer[j][i] = weight[
-                                                          int(rowDim / serverNum) * j:int(rowDim / serverNum) * (j + 1),:].tolist()
-    print('assign parameter end!')
+        for i in range(serverNum):
+            parametersForServer[str(i)]={}
+        for key in parameters.keys():
+            num_p=int(len(parameters[key])/serverNum)
+            for i in range(serverNum):
+                if i!=(serverNum-1):
+                    parametersForServer[str(i)][key]=parameters[key][i*num_p:(i+1)*num_p]
+                else:
+                    parametersForServer[str(i)][key]=parameters[key][i*num_p:]
+
+        for i in range(context.glContext.config['server_num']):
+            context.glContext.dgnnServerRouter[i].initParameter(
+                context.glContext.config['worker_num'],
+                context.glContext.config['server_num'],
+                context.glContext.config['feature_dim'],
+                context.glContext.config['hidden'],
+                context.glContext.config['class_num'],
+                context.glContext.config['id'],
+                context.glContext.parametersForServer[str(i)]
+            )
+        print('assign parameter end!')

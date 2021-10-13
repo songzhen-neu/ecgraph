@@ -58,6 +58,9 @@ public:
     static double embs_max;
     static double embs_min;
 
+    static map<int,double> g_max;
+    static map<int,double> g_min;
+
 
 
 

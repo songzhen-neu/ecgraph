@@ -33,6 +33,9 @@ vector<vector<uint>> WorkerStore::bucketPositionBitMap;
 
 float WorkerStore::comp_percent;
 
+map<int,double> WorkerStore::g_max;
+map<int,double> WorkerStore::g_min;
+
 // worker layer node feature
 map<int,map<int,map<int,vector<float>>>> WorkerStore::embs_from_remote;
 void WorkerStore::set_nodes(const NodeMessage *nodeMessage) {

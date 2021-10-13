@@ -30,18 +30,10 @@ void Check::check_partition_pass(
 
 void Check::check_initParameter_ServerStore() {
     // 输出初始化的weights和bias，看层数和维度是否正确
-    int weights_num=ServerStore::weights.size();
-    int bias_num=ServerStore::bias.size();
-    cout<< "weight layer number:"<< weights_num<<", bias layer number:" <<bias_num<<endl;
-    vector<int> weights_size;
-    for(const auto& weight:ServerStore::weights){
-        int weight_size_x=weight.second.size();
-        int weight_size_y=weight.second[0].size();
-        cout<< "weight layer "<<weight.first<<" size: " << weight_size_x <<"*"<<weight_size_y<<endl;
+    cout << "*******check initParameter start***********" << endl;
+    map<string, vector<float>>::iterator it;
+    for (it = ServerStore::params.begin(); it != ServerStore::params.end(); it++) {
+        cout<<"layer "<<it->first<<" : "<<it->second.size()<<endl;
     }
-
-    for(const auto& bias:ServerStore::bias){
-        int bias_size_x=bias.second.size();
-        cout<< "bias layer "<< bias.first<< " size: " <<bias_size_x <<endl;
-    }
+    cout << "*******check initParameter end***********" << endl;
 }

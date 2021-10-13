@@ -51,6 +51,9 @@ using dgnn_test::RespEmbSparseMessage;
 using dgnn_test::ByteTensorMessage;
 using dgnn_test::ChangeRateMessage;
 using dgnn_test::AccuracyMessage;
+using dgnn_test::StringM;
+using dgnn_test::Param;
+using dgnn_test::GradMessage;
 
 
 class ServiceImpl final:public DgnnProtoService::Service{
@@ -125,6 +128,8 @@ public:
     //    static void* RunServer(void* address_tmp);
     static void RunServerByPy(const string& address,int serverId);
 
+    Status server_updateModels(ServerContext *context, const GradMessage* request, BoolMessage *reply) override;
+
     //Yu
     Status workerSendTrainNode(ServerContext *context, const NodeMessage *request, BoolMessage *reply) override;
     Status serverSendTrainNode(ServerContext *context, const ContextMessage *request, NodeMessage *reply) override;
@@ -134,6 +139,10 @@ public:
 
     Status workerSendTestNode(ServerContext *context, const NodeMessage *request, BoolMessage *reply) override;
     Status serverSendTestNode(ServerContext *context, const ContextMessage *request, NodeMessage *reply) override;
+
+    Status server_PullParams(ServerContext *context, const StringM *request, Param *reply) override;
+    Status server_aggGrad(ServerContext *context,const GradMessage *request, GradMessage *reply) override;
+
 };
 
 

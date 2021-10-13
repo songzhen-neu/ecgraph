@@ -1,15 +1,9 @@
 import torch
-
 import torch.nn as nn
-
 from context import context
 import numpy as np
-#import autograd.autograd as atg
-import context.momentum as mom
 import context.store as store
-# from cmake.build.example2 import *
 from cmake.build.example2 import *
-
 import time
 
 
@@ -18,16 +12,24 @@ import time
 
 
 
-class GraphConvolution(nn.Module):
+class GraphAttention(nn.Module):
 
     # 初始化层：输入feature维度，输出feature维度，权重，偏移
-    def __init__(self, in_features, out_features, layer_id, bias=True):
-        super(GraphConvolution, self).__init__()
+    def __init__(self, in_features, out_features, layer_id, alpha,bias=False):
+        super(GraphAttention, self).__init__()
         self.layer_id = layer_id
         self.in_features = in_features
         self.out_features = out_features
         self.weight = nn.Parameter(torch.FloatTensor(in_features, out_features),
                                    requires_grad=True)  # FloatTensor建立tensor
+        nn.init.xavier_normal(self.weight.data,gain=1.414)
+        self.a=nn.Parameter(torch.FloatTensor(1,2*out_features),requires_grad=True)
+        nn.init.xavier_normal(self.a.data,gain=1.414)
+
+
+        self.alpha=alpha
+        self.leakyrelu=nn.LeakyReLU(self.alpha)
+
         # 常见用法self.v = torch.nn.Parameter(torch.FloatTensor(hidden_size))：
         # 首先可以把这个函数理解为类型转换函数，将一个不可训练的类型Tensor转换成可以训练的类型parameter并将这个parameter
         # 绑定到这个module里面，所以经过类型转换这个self.v变成了模型的一部分，成为了模型中根据训练可以改动的参数了。

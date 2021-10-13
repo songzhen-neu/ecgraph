@@ -432,8 +432,7 @@ void DGNNClient::set_testString() {};
 void
 DGNNClient::initParameter(const int &worker_num, const int &server_num, const int &feat_dim,
                           const vector<int> &hid_dims, const int &class_dim,
-                          const int &wid, map<int, vector<vector<float>>> &weights,
-                          map<int, vector<vector<float>>> &bias) {
+                          const int &wid, map<string, vector<float>> &params) {
     // init workerstore some object
     for (int i = 0; i < worker_num; i++) {
         WorkerStore::compFlag.push_back(false);
@@ -448,24 +447,18 @@ DGNNClient::initParameter(const int &worker_num, const int &server_num, const in
     }
     request.set_workernum(worker_num);
     request.set_wid(wid);
-    for (int i = 0; i < weights.size(); i++) {
-        auto *weight = request.add_weights();
-        auto *bia = request.add_bias();
-        bia->mutable_tensor()->Add(bias[i][0].begin(), bias[i][0].end());
-        for (int j = 0; j < weights[i].size(); j++) {
-//            auto* tensor=weight->add_weight();
-            weight->add_weight()->mutable_tensor()->Add(weights[i][j].begin(), weights[i][j].end());
-//            for(int k=0;k<weights[i][j].size();k++){
-//                tensor->add_tensor(weights[i][j][k]);
-//            }
-        }
+
+    map<string,vector<float>>::iterator it;
+    for(it=params.begin();it!=params.end();it++){
+        auto *param=request.add_params();
+        param->set_id(it->first);
+        param->mutable_elems()->Add(it->second.begin(),it->second.end());
     }
-//    for(int i=0;i<request.weights_size();i++){
-//        cout<<"initParameter weights size:"<<request.weights().size()
-//            <<"*"<<request.weights(i).weight_size()<<"*"<<request.weights(i).weight().begin()->tensor_size()<<endl;
-//        cout<<"initParameter bias size:"<<request.bias_size()
-//            <<"*"<<request.bias(i).tensor_size()<<endl;
-//    }
+
+    for(int i=0;i<request.params_size();i++){
+        cout<<"id:"<<request.params().Get(i).id()<<", size:"<<request.params().Get(i).elems_size()<<endl;
+    }
+
 
 
 
@@ -820,9 +813,9 @@ py::array_t<float> DGNNClient::worker_pull_needed_G_compress(py::array_t<int> &n
     }
 
 
-
+    cout<<"workerPullGCompress start"<<endl;
     Status status = stub_->workerPullGCompress(&context, request, &reply);
-
+    cout<<"workerPullGCompress end"<<endl;
 
 
     // 开始解析压缩后的G
@@ -1390,32 +1383,6 @@ void *DGNNClient::worker_pull_needed_emb_parallel(void *metaData_void) {
     }
 
 
-//    if (status.ok()) {
-//
-//        auto &denseMessage = reply.denseembmessage();
-//        int len = nodes.size();
-//        for (int j = 0; j < len; j++) {
-//            int nid = nodes[j];
-//            int new_id = oldToNewMap[nid] - localNodeSize;
-//            const auto &denseMessage_node = denseMessage.embs(j);
-//            for (int k = 0; k < feat_num; k++) {
-//                ptr_result[new_id * feat_num + k] = (float) denseMessage_node.tensor(k);
-//
-//            }
-//        }
-//
-//
-//        unique_lock<mutex> lck(ThreadUtil::mtx_respWorkerNumForEmbs);
-//        ThreadUtil::count_respWorkerNumForEmbs++;
-//        lck.unlock();
-//    } else {
-//        cout << "pull needed embeddings false" << endl;
-//        cout << "error detail:" << status.error_details() << endl;
-//        cout << "error message:" << status.error_message() << endl;
-//        cout << "error code:" << status.error_code() << endl;
-//        exit(-1);
-//    }
-
 
 }
 
@@ -1547,7 +1514,7 @@ void DGNNClient::server_Barrier(int layer_id) {
     if (status.ok()) {
 //        cout << "okokokokok" << endl;
     } else {
-        cout << "pull bias false" << endl;
+        cout << "server_Barrier false" << endl;
         cout << "error detail:" << status.error_details() << endl;
         cout << "error message:" << status.error_message() << endl;
         cout << "error code:" << status.error_code() << endl;
@@ -1588,13 +1555,24 @@ void DGNNClient::test1Bit() {
 
 }
 
-void DGNNClient::setG(const map<int, vector<float>> &g, int id) {
+void addToMap(map<int, double> &g_map,double v,int layerid){
+    if(g_map.count(layerid)!=0){
+        g_map[layerid]=v;
+    }else{
+        g_map.insert(pair<int,double>(layerid,v));
+    }
+}
+
+void DGNNClient::setG(const map<int, vector<float>> &g, int id,double max_v,double min_v) {
+    addToMap(WorkerStore::g_max,max_v,id);
+    addToMap(WorkerStore::g_min,min_v,id);
+
     if (WorkerStore::G_map.count(id) != 0) {
         WorkerStore::G_map[id] = g;
     } else {
         WorkerStore::G_map.insert(pair<int, map<int, vector<float>>>(id, g));
     }
-
+//    cout<<"g size:"<<WorkerStore::G_map[id].size()<<"*"<<WorkerStore::G_map[id].begin()->second.size()<<endl;
 }
 
 void DGNNClient::test_large() {
@@ -1954,6 +1932,170 @@ deCompressTrend(int epoch, int trend, const vector<int> &nodes, EmbMessage &repl
 
 }
 
+void deCompressConcat_parallel(int bitNum, const Status& status, EmbMessage &reply,vector<int> &nodes,
+                               map<int,int> &oldToNewMap, int localNodeSize, float* ptr_result){
+    uint mask = 0;
+    if (bitNum == 1) {
+        mask = 0x00000001;
+    } else if (bitNum == 2) {
+        mask = 0x00000003;
+    } else if (bitNum == 4) {
+        mask = 0x0000000f;
+    } else if (bitNum == 8) {
+        mask = 0x000000ff;
+    } else if (bitNum == 16) {
+        mask = 0x0000ffff;
+    }
+    int oneIntDimNum = 32 / bitNum;
+
+    if (status.ok()) {
+
+        vector<float> bucket;
+
+        int shape0 = reply.resp_node_size();
+        int shape1 = reply.resp_featdim_size();
+        int shape_dim = reply.shapedim();
+
+//        cout<<"bucket size:!!!"<<reply.values_size()<<endl;
+        for (auto value:reply.values()) {
+            bucket.push_back(value);
+//            cout<<value<<endl;
+
+        }
+
+        auto &embReply = reply.resp_compress_emb_concat();
+
+        for (int i = 0; i < shape0; i++) {
+            int nid = nodes[i];
+            int new_id = oldToNewMap[nid] - localNodeSize;
+            auto &node_worker = nodes[i];
+            for (int j = 0; j < shape1; j++) {
+                uint dim = embReply.Get(i * shape1 + j);
+                // transform to 4 int data_raw
+                if (j * oneIntDimNum + (oneIntDimNum - 1) < shape_dim) {
+                    for (int l = 0; l < oneIntDimNum; l++) {
+                        int a = dim >> (32 - (l + 1) * bitNum) & mask;
+                        ptr_result[new_id * shape_dim + j * oneIntDimNum + l] = bucket[a];
+//                        if(bucket[a]!=0){
+//                            cout<<"bucket a:"<<bucket[a]<<endl;
+//                        }
+
+                    }
+                } else {
+                    int num = shape_dim - j * oneIntDimNum;
+                    for (int l = 0; l < num; l++) {
+                        int a = dim >> (32 - (l + 1) * bitNum) & mask;
+                        ptr_result[new_id * shape_dim + j * oneIntDimNum + l] = bucket[a];
+                    }
+
+                }
+
+            }
+
+
+        }
+
+
+        unique_lock<mutex> lck(ThreadUtil::mtx_respWorkerNumForEmbs);
+        ThreadUtil::count_respWorkerNumForEmbs++;
+        lck.unlock();
+    } else {
+        cout << "worker_pull_emb_compress false" << endl;
+        cout << "error detail:" << status.error_details() << endl;
+        cout << "error message:" << status.error_message() << endl;
+        cout << "error code:" << status.error_code() << endl;
+    }
+}
+
+void* DGNNClient::worker_pull_g_compress_parallel(void *metaData_void) {
+    ClientContext context;
+    EmbMessage request;
+    auto metaData = (ReqEmbsMetaData *) metaData_void;
+    vector<int> &nodes = *metaData->nodes;
+    int layerId = metaData->layerId;
+    int workerId = metaData->workerId;
+    int serverId = metaData->serverId;
+    int layerNum = metaData->layerNum;
+    int bitNum = metaData->bitNum;
+    EmbMessage &reply = *metaData->reply;
+    DGNNClient *dgnnClient = metaData->dgnnClient;
+    float *ptr_result = metaData->ptr_result;
+    auto oldToNewMap = *metaData->oldToNewMap;
+    int localNodeSize = metaData->localNodeSize;
+    int feat_num = metaData->feat_num;
+    int nodeNum=metaData->nodes->size();
+    bool ifCompensate=metaData->ifCompensate;
+    int epoch=metaData->epoch;
+
+    request.mutable_nodes()->Add(nodes.begin(),nodes.end());
+    request.set_layerid(layerId);
+    request.set_bitnum(bitNum);
+    request.set_epoch(epoch);
+    request.set_ifcompensate(ifCompensate);
+
+    Status status=dgnnClient->stub_->workerPullGCompress(&context,request,&reply);
+
+    if(status.ok()){
+
+        deCompressConcat_parallel(bitNum,status,reply,nodes,oldToNewMap,localNodeSize,ptr_result);
+
+    }else{
+        cout<<"worker pull g compress parallel false"<<endl;
+    }
+
+}
+
+void* DGNNClient::worker_pull_g_parallel(void* metaData_void){
+    ClientContext context;
+    EmbMessage request;
+    auto metaData = (ReqEmbsMetaData *) metaData_void;
+    vector<int> &nodes = *metaData->nodes;
+    int layerId = metaData->layerId;
+    int workerId = metaData->workerId;
+    int serverId = metaData->serverId;
+    int layerNum = metaData->layerNum;
+    int bitNum = metaData->bitNum;
+    EmbMessage &reply = *metaData->reply;
+    DGNNClient *dgnnClient = metaData->dgnnClient;
+    float *ptr_result = metaData->ptr_result;
+    auto oldToNewMap = *metaData->oldToNewMap;
+    int localNodeSize = metaData->localNodeSize;
+    int feat_num = metaData->feat_num;
+    int nodeNum=metaData->nodes->size();
+
+    request.mutable_nodes()->Add(nodes.begin(),nodes.end());
+    request.set_layerid(layerId);
+
+    Status status=dgnnClient->stub_->workerPullG(&context,request,&reply);
+
+    if (status.ok()) {
+//        cout<<"resp_none_compress_emb_concat size:"<<reply.resp_none_compress_emb_concat().size()<<",mutable size:"<<
+//            reply.mutable_resp_none_compress_emb_concat()->size()<<endl;
+        auto &embConcat = reply.resp_none_compress_emb_concat();
+
+        for (int j = 0; j < nodeNum; j++) {
+            int nid = nodes[j];
+            int new_id = oldToNewMap[nid] - localNodeSize;
+//            if(j==5){
+//                cout<<"+***************"<<embConcat.Get(j * feat_num+10)<<endl;
+//            }
+            for (int k = 0; k < feat_num; k++) {
+                ptr_result[new_id * feat_num + k] = embConcat.Get(j * feat_num + k);
+
+            }
+        }
+        unique_lock<mutex> lck(ThreadUtil::mtx_respWorkerNumForEmbs);
+        ThreadUtil::count_respWorkerNumForEmbs++;
+        lck.unlock();
+    } else {
+        cout << "pull needed g false" << endl;
+        cout << "error detail:" << status.error_details() << endl;
+        cout << "error message:" << status.error_message() << endl;
+        cout << "error code:" << status.error_code() << endl;
+        exit(-1);
+    }
+}
+
 void *DGNNClient::worker_pull_emb_trend_parallel_select(void *metaData_void) {
     ClientContext context;
     EmbMessage request;
@@ -2306,7 +2448,7 @@ void DGNNClient::sendTrainNode(int worker_id, py::array_t<int> list) {
     if (status.ok()) {
 //        cout << "okokokokok" << endl;
     } else {
-        cout << "update parameters false" << endl;
+        cout << "workerSendTrainNode" << endl;
         cout << "error detail:" << status.error_details() << endl;
         cout << "error message:" << status.error_message() << endl;
         cout << "error code:" << status.error_code() << endl;
@@ -2342,7 +2484,7 @@ void DGNNClient::sendValNode(int worker_id, py::array_t<int> list) {
     if (status.ok()) {
 //        cout << "okokokokok" << endl;
     } else {
-        cout << "update parameters false" << endl;
+        cout << "sendValNode false" << endl;
         cout << "error detail:" << status.error_details() << endl;
         cout << "error message:" << status.error_message() << endl;
         cout << "error code:" << status.error_code() << endl;
@@ -2378,7 +2520,7 @@ void DGNNClient::sendTestNode(int worker_id, py::array_t<int> list) {
     if (status.ok()) {
 //        cout << "okokokokok" << endl;
     } else {
-        cout << "update parameters false" << endl;
+        cout << "sendTestNode false" << endl;
         cout << "error detail:" << status.error_details() << endl;
         cout << "error message:" << status.error_message() << endl;
         cout << "error code:" << status.error_code() << endl;
@@ -2403,3 +2545,113 @@ py::array_t<int> DGNNClient::pullTestNode() {
     return result;
 }
 
+
+py::array_t<float> DGNNClient::server_PullParams(const string& param_id){
+    ClientContext context;
+    StringM request;
+    request.set_value(param_id);
+//    cout<<"param_id message:"<<request.value()<<endl;
+    Param reply;
+    Status status= stub_->server_PullParams(&context,request,&reply);
+    auto result=py::array_t<float>(reply.elems_size());
+
+    if(status.ok()){
+        py::buffer_info buf_result=result.request();
+        auto *ptr_result=(float *) buf_result.ptr;
+        for(int i=0;i<reply.elems_size();i++) {
+            ptr_result[i] = reply.elems(i);
+        }
+//        cout<<"result size:"<<result.size()<<endl;
+    }else{
+        cout<<"pull parameters error"<<endl;
+        cout << "error detail:" << status.error_details() << endl;
+        cout << "error message:" << status.error_message() << endl;
+        cout << "error code:" << status.error_code() << endl;
+
+    }
+    return result;
+
+}
+
+
+void DGNNClient::server_updateModels( int worker_id, int server_id,float lr,const string& key, py::array_t<float>& grad){
+    // 发送收到的梯度到参数服务器中
+    ClientContext context;
+    GradMessage request;
+    BoolMessage reply;
+
+    request.set_wid(worker_id);
+    request.set_sid(server_id);
+    request.set_lr(lr);
+    Param* grad_message=request.grad().New();
+
+    grad_message->set_id(key);
+
+    py::buffer_info grad_buf = grad.request();
+//    if (grad_buf.ndim != 1) {
+//        throw std::runtime_error("numpy.ndarray dims must be 1!");
+//    }
+    auto *ptr1 = (float *) grad_buf.ptr;
+
+    grad_message->mutable_elems()->Reserve(grad.size());
+    for(int i=0;i<grad.size();i++){
+        grad_message->mutable_elems()->Add(ptr1[i]);
+    }
+    request.set_allocated_grad(grad_message);
+
+    Status status = stub_->server_updateModels(&context, request, &reply);
+    if (status.ok()) {
+//        cout << "okokokokok" << endl;
+    } else {
+        cout << "update parameters false" << endl;
+        cout << "error detail:" << status.error_details() << endl;
+        cout << "error message:" << status.error_message() << endl;
+        cout << "error code:" << status.error_code() << endl;
+    }
+}
+
+
+py::array_t<float> DGNNClient::server_aggGrad(int worker_id, int server_id,float lr,const string& key, py::array_t<float>& grad) {
+    // 发送收到的梯度到参数服务器中
+    ClientContext context;
+    GradMessage request;
+    GradMessage reply;
+
+    request.set_wid(worker_id);
+    request.set_sid(server_id);
+    request.set_lr(lr);
+    Param* grad_message=request.grad().New();
+
+    grad_message->set_id(key);
+
+    py::buffer_info grad_buf = grad.request();
+//    if (grad_buf.ndim != 1) {
+//        throw std::runtime_error("numpy.ndarray dims must be 1!");
+//    }
+    auto *ptr1 = (float *) grad_buf.ptr;
+
+    grad_message->mutable_elems()->Reserve(grad.size());
+    for(int i=0;i<grad.size();i++){
+        grad_message->mutable_elems()->Add(ptr1[i]);
+    }
+    request.set_allocated_grad(grad_message);
+
+    Status status = stub_->server_aggGrad(&context, request, &reply);
+    auto size=reply.grad().elems_size();
+    auto result=py::array_t<float>(size);
+
+    if (status.ok()) {
+        py::buffer_info buf_result=result.request();
+        auto* ptr_result=(float *)buf_result.ptr;
+        for(int i=0;i<size;i++){
+            ptr_result[i]=reply.grad().elems(i);
+        }
+    } else {
+        cout << "update parameters false" << endl;
+        cout << "error detail:" << status.error_details() << endl;
+        cout << "error message:" << status.error_message() << endl;
+        cout << "error code:" << status.error_code() << endl;
+    }
+
+    return result;
+}

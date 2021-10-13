@@ -83,6 +83,7 @@ PYBIND11_MODULE(example2, m) {
             .def(py::init<>())
             .def("getNeededEmb",&Router::getNeededEmb)
             .def("get_comp_percent",&Router::get_comp_percent)
+            .def("getG",&Router::getG)
             .def("initWorkerRouter",&Router::initWorkerRouter);
 
     // 创建client
@@ -109,11 +110,14 @@ PYBIND11_MODULE(example2, m) {
             .def("worker_pull_needed_G_compress",&DGNNClient::worker_pull_needed_G_compress)
             .def("sendAccuracy",&DGNNClient::sendAccuracy)
             .def("freeMaster",&DGNNClient::freeMaster)
+            .def("server_updateModels",&DGNNClient::server_updateModels)
 //            .def("worker_pull_needed_emb_compress_iter",&DGNNClient::worker_pull_needed_emb_compress_iter)
 //            .def("worker_pull_emb_trend",&DGNNClient::worker_pull_emb_trend)
             .def("getChangeRate",&DGNNClient::getChangeRate)
             .def("initCompressBitMap",&DGNNClient::initCompressBitMap)
             .def("freeSpace",&DGNNClient::freeSpace)
+            .def("server_PullParams",&DGNNClient::server_PullParams)
+            .def("server_aggGrad",&DGNNClient::server_aggGrad)
             .def("sendTrainNode",&DGNNClient::sendTrainNode) //Yu
             .def("pullTrainNode",&DGNNClient::pullTrainNode) //Yu
             .def("sendValNode",&DGNNClient::sendValNode) //Yu

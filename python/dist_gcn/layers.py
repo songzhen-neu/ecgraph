@@ -28,15 +28,24 @@ class GraphConvolution(nn.Module):
         self.out_features = out_features
         self.weight = nn.Parameter(torch.FloatTensor(in_features, out_features),
                                    requires_grad=True)  # FloatTensor建立tensor
+        nn.init.xavier_normal_(self.weight.data,gain=1.414)
+        context.glContext.parameters['w'+str(layer_id)]=self.weight.data.flatten().detach().tolist()
         # 常见用法self.v = torch.nn.Parameter(torch.FloatTensor(hidden_size))：
         # 首先可以把这个函数理解为类型转换函数，将一个不可训练的类型Tensor转换成可以训练的类型parameter并将这个parameter
         # 绑定到这个module里面，所以经过类型转换这个self.v变成了模型的一部分，成为了模型中根据训练可以改动的参数了。
         # 使用这个函数的目的也是想让某些变量在学习的过程中不断的修改其值以达到最优化。
         if bias:
-            self.bias = nn.Parameter(torch.FloatTensor(out_features), requires_grad=True)
+            self.bias = nn.Parameter(torch.FloatTensor(1,out_features), requires_grad=True)
+            nn.init.xavier_normal_(self.bias.data)
+            self.bias.data=self.bias.data.flatten()
+            context.glContext.parameters['b'+str(layer_id)]=self.bias.data.flatten().detach().tolist()
         else:
             self.register_parameter('bias', None)
-            # Parameters与register_parameter都会向parameters写入参数，但是后者可以支持字符串命名
+        # context.glContext.weights[layer_id]=self.weight.data
+        # context.glContext.bias[layer_id]=self.bias.data
+
+
+        # Parameters与register_parameter都会向parameters写入参数，但是后者可以支持字符串命名
         # self.reset_parameters()
     # 初始化权重
     # def reset_parameters(self):
@@ -53,7 +62,7 @@ class GraphConvolution(nn.Module):
     support与adj进行torch.spmm操作，得到output，即AXW选择是否加bias
     '''
 
-    def forward(self, input, adj, nodes, epoch, weights, bias, autograd,graph):
+    def forward(self, input, adj, nodes, epoch, autograd,graph):
         # 权重需要从参数服务器中获取,先不做参数划分了，只弄一个server
         # 从参数服务器获取第0层的参数
         context.glContext.dgnnServerRouter[0].server_Barrier(self.layer_id)
@@ -62,8 +71,17 @@ class GraphConvolution(nn.Module):
         # min1=torch.min(input)
         # print("max:{0},min{1}:".format(max1,min1))
         # 更新自身weights和bias
-        self.weight.data = torch.FloatTensor(weights)
-        self.bias.data = torch.FloatTensor(bias)
+        weights=[]
+        bias=[]
+        for i in range(context.glContext.config['server_num']):
+            weights.extend(context.glContext.dgnnServerRouter[i].server_PullParams('w'+str(self.layer_id)))
+            bias.extend(context.glContext.dgnnServerRouter[i].server_PullParams('b'+str(self.layer_id)))
+
+
+
+        self.weight.data = torch.FloatTensor(weights).reshape(self.in_features,self.out_features)
+        self.bias.data = torch.FloatTensor(bias).reshape(self.out_features)
+
 
         # 将support设置到dgnnClient里,需要转成原index,slow
         emb_temp = input.detach().numpy()
@@ -89,14 +107,15 @@ class GraphConvolution(nn.Module):
         feat_size = len(emb_temp[0])
 
         needed_embs = context.glContext.dgnnClientRouterForCpp.getNeededEmb(
-            graph.fsthop_for_worker, epoch, self.layer_id, context.glContext.config['id'],
+            graph.fsthop_for_worker[epoch%context.glContext.config['distgnn_r']] if store.isTrain else graph.fsthop_for_worker
+            , epoch, self.layer_id, context.glContext.config['id'],
             graph.id_old2new_dict, context.glContext.config['worker_num'], len(nodes),
             context.glContext.config['ifCompress'], context.glContext.config['layerNum'],
             int(context.glContext.config['bitNum']), context.glContext.config['isChangeRate'], store.isTrain,
             context.glContext.config['trend'], feat_size,context.glContext.config['changeRateMode'])
 
         end = time.time()
-
+        # all the remote neighbors
 
         # 获取完之后，将嵌入进行合并，按照新顶点的顺序
         # 这里其实是把一阶邻居的顶点的中间嵌入按照new id的顺序排列好
@@ -104,12 +123,9 @@ class GraphConvolution(nn.Module):
 
         start = time.time()
 
-
-
         # 将needed_embs转化为tensor
 
         needed_embs = torch.FloatTensor(needed_embs)
-
 
         input = torch.cat((input, needed_embs), 0)
 

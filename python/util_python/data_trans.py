@@ -253,6 +253,8 @@ def load_datav2(dgnnClient):
     idx_test = rand_indices[train_num + val_num:train_num + val_num + test_num]
 
     all_train_node_set = all_agg_node_num(nodes_from_server, idx_train, idx_val, idx_test, adjs_from_server)
+    # all_train_node_set=sorted(all_train_node_set)
+
 
     # build the first-hop neighboring set (containing the local and remote neighbors)
     first_hop_set = set()
@@ -323,24 +325,44 @@ def load_datav2(dgnnClient):
                        first_hop_set_for_workers)
 
     # 构建train的graph
-    first_hop_set_train = set()
     train_node_old_id=[id_new2old_map[i] for i in idx_train]
     train_node_old_id=sorted(train_node_old_id)
-    for vid in train_node_old_id:
-        for neighbor_id in adjs_from_server[vid]:
-            if neighbor_id in all_train_node_set:
-                first_hop_set_train.add(int(neighbor_id))
 
-    first_hop_set_for_workers_train = []
-    for i in range(context.glContext.config['worker_num']):
-        first_hop_set_for_workers_train.append(list())
-    for id in first_hop_set_train:
-        workerId = nodes_in_worker[id]
-        first_hop_set_for_workers_train[workerId].append(id)
+    idx_train_r=[]
+    r=context.glContext.config['distgnn_r']
+    num_per_r=int(len(idx_train)/r)
+    for i in range(r):
+        if i<r-1:
+            idx_train_r.append(train_node_old_id[i*num_per_r:(i+1)*num_per_r])
+        else:
+            idx_train_r.append(train_node_old_id[i*num_per_r:])
+
+
+
+    first_hop_set_train_r=[]
+    for id_r in range(r):
+        first_hop_set_train_r.append(set())
+        for vid in idx_train_r[id_r]:
+            for nid in adjs_from_server[vid]:
+                if nid in all_train_node_set:
+                    first_hop_set_train_r[id_r].add(int(nid))
+
+
+    first_hop_set_for_workers_train_r=[]
+    for id_r in range(r):
+        first_hop_set_for_workers_train_r.append([])
+        for i in range(context.glContext.config['worker_num']):
+            first_hop_set_for_workers_train_r[id_r].append(list())
+
+    for id_r in range(r):
+        for id in first_hop_set_train_r[id_r]:
+            workerId = nodes_in_worker[id]
+            first_hop_set_for_workers_train_r[id_r][workerId].append(id)
 
     # transform set to numpy ndarray
-    for i in range(len(first_hop_set_for_workers_train)):
-        first_hop_set_for_workers_train[i] = np.array(first_hop_set_for_workers_train[i])
+    for id_r in range(r):
+        for i in range(len(first_hop_set_for_workers_train_r[id_r])):
+            first_hop_set_for_workers_train_r[id_r][i] = np.array(sorted(first_hop_set_for_workers_train_r[id_r][i]))
 
     # 将feature的dict转化成list
     feat_data_train = []
@@ -393,12 +415,13 @@ def load_datav2(dgnnClient):
     feat_data_train = torch.FloatTensor(np.array(feat_data_train.todense()))
     labels_train = torch.LongTensor(labels_train)
     graph_train = Graph(train_node_old_id, feat_data_train, labels_train,
-                        adjs_train, id_old2new_map_train, id_new2old_map_train, first_hop_set_for_workers_train)
+                        adjs_train, id_old2new_map_train, id_new2old_map_train,first_hop_set_for_workers_train_r)
 
 
     idx_train = torch.LongTensor(idx_train)
     idx_val = torch.LongTensor(idx_val)
     idx_test = torch.LongTensor(idx_test)
+
 
     return {'idx_val': idx_val,
             'idx_train': idx_train,
@@ -422,20 +445,28 @@ def all_agg_node_num(nodes_from_server, idx_train, idx_val, idx_test, adj_lists_
 
     worker_id = context.glContext.config['id']
     context.glContext.dgnnServerRouter[0].sendTrainNode(worker_id, real_train_num)  # 传输训练节点
+    context.glContext.dgnnServerRouter[0].server_Barrier(0)  # 等待所有节点都上传完训练节点
     print("send train node finish")
+
     context.glContext.dgnnServerRouter[0].sendValNode(worker_id, real_val_num)  # 传输验证节点
+    context.glContext.dgnnServerRouter[0].server_Barrier(0)  # 等待所有节点都上传完训练节点
     print("send val node finish")
+
     context.glContext.dgnnServerRouter[0].sendTestNode(worker_id, real_test_num)  # 传输测试节点
+    context.glContext.dgnnServerRouter[0].server_Barrier(0)  # 等待所有节点都上传完训练节点
     print("send test node finish")
 
     context.glContext.dgnnServerRouter[0].server_Barrier(0)  # 等待所有节点都上传完训练节点
     print("waiting other worker send node...")
 
     all_train_nodes = context.glContext.dgnnServerRouter[0].pullTrainNode()  # 获得所有的训练节点
+    context.glContext.dgnnServerRouter[0].server_Barrier(0)  # 等待所有节点都上传完训练节点
     print("get all train node!")
     all_val_nodes = context.glContext.dgnnServerRouter[0].pullValNode()  # 获得所有验证节点
+    context.glContext.dgnnServerRouter[0].server_Barrier(0)  # 等待所有节点都上传完训练节点
     print("get all val node!")
     all_test_nodes = context.glContext.dgnnServerRouter[0].pullTestNode()  # 获得所有测试节点
+    context.glContext.dgnnServerRouter[0].server_Barrier(0)  # 等待所有节点都上传完训练节点
     print("get all test node!")
 
     all_train_nodes_set = set(all_train_nodes)

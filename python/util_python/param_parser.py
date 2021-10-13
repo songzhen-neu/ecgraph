@@ -22,6 +22,14 @@ def parserInit():
     parser.add_argument('--workers', type=str, help='worker ip')
     parser.add_argument('--master', type=str, help='master ip')
 
+    parser.add_argument('--distgnnr',type=int,default=1,help='r for distgnn')
+
+
+    # parameter for GAT
+    parser.add_argument('--nb_heads', type=int, default=8, help='Number of head attentions.')
+    parser.add_argument('--alpha', type=float, default=0.2, help='Alpha for the leaky_relu.')
+
+
     args = parser.parse_args()
     ifctx_mode=str.split(args.ifctx_mode,',')
 
@@ -39,6 +47,9 @@ def parserInit():
 
         context.glContext.config['mode'] = 'code'
         context.glContext.config['layerNum'] = len(context.glContext.config['hidden']) + 1
+        context.glContext.config['emb_dims'].append(context.glContext.config['feature_dim'])
+        context.glContext.config['emb_dims'].extend(context.glContext.config['hidden'])
+        context.glContext.config['emb_dims'].append(context.glContext.config['class_num'])
     else:
         print("setting mode as test")
         role_id=str.split(args.role_id,',')
@@ -61,6 +72,14 @@ def parserInit():
         context.glContext.config['train_num'] = int(vtx_edge_feat_class_train_val_test[4])
         context.glContext.config['val_num'] = int(vtx_edge_feat_class_train_val_test[5])
         context.glContext.config['test_num'] = int(vtx_edge_feat_class_train_val_test[6])
+
+        context.glContext.config['emb_dims'].append(context.glContext.config['feature_dim'])
+        context.glContext.config['emb_dims'].extend(context.glContext.config['hidden'])
+        context.glContext.config['emb_dims'].append(context.glContext.config['class_num'])
+
+        # GAT
+        context.glContext.config['nb_heads']=int(args.nb_heads)
+        context.glContext.config['alpha']=float(args.alpha)
 
         if_array=str.split(args.if_cprs_trend_backcprs_backcpst_changeBit,',')
         if if_array[0] == 'false':
@@ -100,6 +119,8 @@ def parserInit():
         context.glContext.config['iterNum'] = int(iter_lr_pttMethod[0])
         context.glContext.config['lr'] = float(iter_lr_pttMethod[1])
         context.glContext.config['partitionMethod'] = iter_lr_pttMethod[2]
+
+        context.glContext.config['distgnn_r']=args.distgnnr
 
     context.glContext.ipInit(args.servers, args.workers, args.master)
     store.init()

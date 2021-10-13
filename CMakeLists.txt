@@ -13,8 +13,8 @@ set(CMAKE_CXX_STANDARD 11)
 #include(FindProtobuf)
 set(protobuf_MODULE_COMPATIBLE TRUE)
 #set(Protobuf_PROTOC_EXECUTABLE "/usr/local/bin/protoc")
-#find_package(Protobuf CONFIG REQUIRED)
-find_package(Protobuf REQUIRED)
+find_package(Protobuf CONFIG REQUIRED)
+#find_package(Protobuf REQUIRED)
 
 message(STATUS "Using protobuf ${Protobuf_VERSION}")
 
@@ -125,7 +125,6 @@ target_link_libraries(dgnn_server_lib
 # if you want to generate grpc and protobuf files, you should annotate all dependencies on client_lib
 target_link_libraries(client_lib core)
 target_link_libraries(client_lib workerStore)
-
 target_link_libraries(client_lib pybind11::embed)
 target_link_libraries(dgnn_server_lib core)
 add_executable(mainTest main.cc)

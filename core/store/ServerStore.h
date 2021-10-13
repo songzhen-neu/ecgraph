@@ -18,6 +18,13 @@ public:
     static int server_num;
     static vector<int> hid_dims;
     static int class_dim;
+    static map<string,vector<float>> params;
+    static map<string,vector<float>> grads_agg;
+    static map<string,vector<float>> m_grads_t;
+    static map<string,vector<float>> v_grads_t;
+
+
+
     static map<int,vector<vector<float>>> weights;
     static map<int,vector<float>> bias;
     // 用完记得清空

@@ -2132,6 +2132,14 @@ using namespace std;
 // make重新编译，  出现问题，是因为core和client_lib之间互相依赖的原因，把client_lib对core的依赖删掉即可
 int main() {
     DGNNClient dgnnClient;
+    int a[100]={};
+//    memset(a,0,100);
+
+    for(int i=0;i<100;i++){
+        if(a[i]!=0){
+            cout<<a[i]<<endl;
+        }
+    }
 
 //    testSelectMain();
 //    testPartition2();
