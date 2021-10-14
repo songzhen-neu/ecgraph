@@ -52,7 +52,7 @@ If you just want to run EC-Graph on a single-machine, you can just "mkdir /mnt/d
 ```
 Two files will be created (all separators are "\t"). 
 
-featsClass.txt (id   feat (dim = 2)   class):
+featsClass.txt (id   feat (dim = 5)   class):
 0 1 0 1 1 1 0
 1 0 1 1 0 1 1
 2 0 0 0 1 1 0
