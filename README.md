@@ -1,4 +1,6 @@
-# EC-Graph: A Distributed GNN System.
+# EC-Graph: A Distributed GNN System with Error-Compensted Compression.
+
+This is a system for distributed GNN training.
 
 The argument list:
 ```c++
