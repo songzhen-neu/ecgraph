@@ -20,6 +20,7 @@ service DgnnProtoService{
   rpc pullBias(IntMessage) returns(WeightsAndBiasMessage){}
   rpc barrier(BoolMessage) returns(BoolMessage){}
   rpc workerPullEmb(EmbMessage) returns(EmbMessage){}
+  rpc workerPullEmb_fb(EmbMessage) returns(EmbMessage){}
   rpc Server_SendAndUpdateModels(GradientMessage) returns(BoolMessage){}
   rpc TestVariant(TestVMessage) returns(BoolMessage) {}
   rpc Test1Bit(BitArrayMessage) returns(BitArrayMessage) {}
@@ -43,6 +44,9 @@ service DgnnProtoService{
   rpc server_PullParams(StringM) returns(Param){};
   rpc server_updateModels(GradMessage) returns(BoolMessage){};
   rpc server_aggGrad(GradMessage) returns (GradMessage){};
+
+  rpc workerSendNode(NodeMessage) returns(BoolMessage){}
+  rpc serverSendNode(NodeMessage) returns(NodeMessage){}
 }
 
 message StringM{
@@ -261,6 +265,7 @@ message DataMessage{
 
 message NodeMessage{
   repeated int32 nodes = 1;
+  int32 layid=2;
 }
 
 message BoolMessage{

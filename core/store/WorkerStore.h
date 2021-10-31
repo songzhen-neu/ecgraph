@@ -61,8 +61,29 @@ public:
     static map<int,double> g_max;
     static map<int,double> g_min;
 
+    static map<int,int> oid2nid_embs;
+    static float* embs_ptr;
 
 
+    static double g_max_ptr;
+    static double g_min_ptr;
+    static map<int,int> oid2nid_g;
+    static float* g_ptr;
+
+    static vector<vector<int>> request_nodes;
+    static int worker_id;
+    static map<int,int> oldToNewMap;
+    static int worker_num;
+    static bool iscompress;
+    static bool ischangerate;
+    static bool iscompress_bp;
+    static bool iscompensate_bp;
+    static int bits_bp;
+    static int bits;
+    static int local_node_size;
+    static int trend;
+    static vector<int> emb_nodes;
+    static int total_reqnum;
 
     static void set_nodes(const NodeMessage *nodeMessage);
     static void set_nodes_for_each_worker(const DataMessage *reply);

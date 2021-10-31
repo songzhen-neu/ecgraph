@@ -32,6 +32,7 @@ map<string,vector<float>> ServerStore::params;
 map<string,vector<float>> ServerStore::grads_agg;
 map<string,vector<float>> ServerStore::m_grads_t;
 map<string,vector<float>> ServerStore::v_grads_t;
+map<int,vector<int>> ServerStore::nodes;
 
 void ServerStore::initParams(const int &workerN,const int &serverN,const int & fd,const int & cd,const vector<int> &hd) {
     ServerStore::worker_num=workerN;

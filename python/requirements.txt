@@ -13,3 +13,4 @@ typing-extensions==3.7.4.3
 virtualenv==20.2.2
 zipp==3.4.0
 scikit-learn==0.23.2
+psutil==5.8.0

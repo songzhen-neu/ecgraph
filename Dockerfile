@@ -6,7 +6,7 @@ RUN pip3 install -r /code/python/requirements.txt -i https://pypi.doubanio.com/s
 # RUN pip3 install -r /code/python/requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host=https://pypi.tuna.tsinghua.edu.cn/simple
 ENV role_id="", worker_server_num="", ifctx_mode="", data_path="", hidden="", vtx_edge_feat_class_train_val_test=""
 ENV if_cprs_trend_backcprs_backcpst_changeBit="", bit_backbit_trend_printepoch="", iter_lr_pttMethod="", servers="", workers="", master=""
-ENV distgnnr=""
+ENV distgnnr="", prune_layer="", neigh_sam=""
 
 RUN apt update && apt install -y wget vim git libz-dev net-tools inetutils-ping lsof
 # RUN apt-get -y install gawk && apt-get -y install bison
@@ -36,4 +36,4 @@ RUN mkdir -p /mnt/data/nfs/graph-learn/distributed/
 
 CMD mount -o nolock -t nfs 219.216.64.103:/var/data /mnt/data && python3 $code_path $role_id $worker_server_num $ifctx_mode $data_path \
 $data_path $hidden $vtx_edge_feat_class_train_val_test $if_cprs_trend_backcprs_backcpst_changeBit $bit_backbit_trend_printepoch \
-$iter_lr_pttMethod $servers $workers $master $distgnnr
+$iter_lr_pttMethod $servers $workers $master $distgnnr $prune_layer $neigh_sam

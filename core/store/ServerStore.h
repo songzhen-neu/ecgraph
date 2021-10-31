@@ -47,6 +47,7 @@ public:
     static vector<int> train_nodes;
     static vector<int> val_nodes;
     static vector<int> test_nodes;
+    static map<int,vector<int>> nodes;
     static void initParams(const int &workerN,const int &serverN,const int & feat_dim,const int & class_dim,const vector<int> &hid_dims);
 };
 

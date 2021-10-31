@@ -29,7 +29,7 @@ import torch.optim as optim
 from cmake.build.example2 import *
 from context import context
 
-from dist_gcn_agg_grad.models import GCN
+from dist_gcn_agg_grad_sample.models import GCN
 # import autograd.autograd as atg
 import autograd.autograd_new as autoG
 from util_python import data_trans as dt
@@ -125,9 +125,10 @@ def clear_time():
 def run_gnn(dgnnClient, model):
     # 从远程获取顶点信息（主要是边缘顶点一阶邻居信息）后，在本地进行传播
     # features, adjs, labels are based on the order of new id, and these only contains the local nodes
-    data = dt.load_datav2(dgnnClient)
+    # data = dt.load_datav2(dgnnClient)
     # data=dt.load_data(dgnnClient)
     # agg_node = data['agg_node']
+    data=dt.load_data_sample(dgnnClient)
 
     idx_val = data['idx_val']
     idx_train = data['idx_train']
@@ -140,7 +141,7 @@ def run_gnn(dgnnClient, model):
     test_num = data['test_num']
     val_num = data['val_num']
     graph_full = data['graph_full']
-    # graph_train = data['graph_train']
+    graph_train = data['graph_train']
 
     laynum = context.glContext.config["layerNum"]
     server_num = context.glContext.config['server_num']
@@ -162,25 +163,25 @@ def run_gnn(dgnnClient, model):
     graph_full.adj = adjs
     printInfo(graph_full.fsthop_for_worker)
 
-    # edges_train = []
-    # train_vertices_new = range(len(graph_train.train_vertices))
-    # # 从adj中解析出edge
-    # for i in range(len(graph_train.adj)):
-    #     for nei_id in graph_train.adj[i]:
-    #         edges_train.append([i, nei_id])
-    # edges_train = np.array(edges_train)
-    # adjs_train = sp.coo_matrix((np.ones(edges_train.shape[0]), (edges_train[:, 0], edges_train[:, 1])),
-    #                            shape=(len(graph_train.id_old2new_dict), len(graph_train.id_old2new_dict)),
-    #                            dtype=np.int)
-    # adjs_train = adjs_train + adjs_train.T.multiply(adjs_train.T > adjs_train) - adjs_train.multiply(
-    #     adjs_train.T > adjs_train)
-    # adjs_train = dt.normalize_gcn(adjs_train + sp.eye(adjs_train.shape[0]))  # eye创建单位矩阵，第一个参数为行数，第二个为列数
-    # adjs_train = adjs_train[train_vertices_new]
-    #
-    # adjs_train = dt.sparse_mx_to_torch_sparse_tensor(adjs_train)  # 邻接矩阵转为tensor处理
-    #
-    # # printInfo(graph_train.fsthop_for_worker)
-    # graph_train.adj = adjs_train
+    edges_train = []
+    train_vertices_new = range(len(graph_train.train_vertices))
+    # 从adj中解析出edge
+    for i in range(len(graph_train.adj)):
+        for nei_id in graph_train.adj[i]:
+            edges_train.append([i, nei_id])
+    edges_train = np.array(edges_train)
+    adjs_train = sp.coo_matrix((np.ones(edges_train.shape[0]), (edges_train[:, 0], edges_train[:, 1])),
+                               shape=(len(graph_train.id_old2new_dict), len(graph_train.id_old2new_dict)),
+                               dtype=np.int)
+    adjs_train = adjs_train + adjs_train.T.multiply(adjs_train.T > adjs_train) - adjs_train.multiply(
+        adjs_train.T > adjs_train)
+    adjs_train = dt.normalize_gcn(adjs_train + sp.eye(adjs_train.shape[0]))  # eye创建单位矩阵，第一个参数为行数，第二个为列数
+    adjs_train = adjs_train[train_vertices_new]
+
+    adjs_train = dt.sparse_mx_to_torch_sparse_tensor(adjs_train)  # 邻接矩阵转为tensor处理
+
+    # printInfo(graph_train.fsthop_for_worker)
+    graph_train.adj = adjs_train
 
     ifCompress = context.glContext.config['ifCompress']
     timeList = []
@@ -194,15 +195,15 @@ def run_gnn(dgnnClient, model):
 
         # slow
         start = time.time()
-        output = model(graph_full.feat_data, graph_full.adj, graph_full.train_vertices, epoch, graph_full)  # change
+        output = model(graph_train.feat_data, graph_train.adj, graph_train.train_vertices, epoch, graph_train)  # change
         end = time.time()
         context.glContext.time_epoch['forward']+=(end-start)
 
         start_othertime = time.time()
         autograd.set_HZ(output, True, True, context.glContext.config["layerNum"])
 
-        loss_train = F.nll_loss(output[idx_train], graph_full.label[idx_train])
-        acc_train = accuracy_score(graph_full.label[idx_train].detach().numpy(),
+        loss_train = F.nll_loss(output[idx_train], graph_train.label[idx_train])
+        acc_train = accuracy_score(graph_train.label[idx_train].detach().numpy(),
                                    output[idx_train].detach().numpy().argmax(axis=1))
 
         start_backward = time.time()
@@ -216,14 +217,10 @@ def run_gnn(dgnnClient, model):
         end_backward = time.time()
         context.glContext.time_epoch['backward']+=(end_backward-start_backward)
 
-
-
-
-
         # 需要准确的反向传播过程
         start_bp_manu = time.time()
-        autograd.back_prop_detail(dgnnClient, model, graph_full.id_new2old_dict, graph_full.train_vertices, epoch,
-                                  graph_full.adj, graph_full)
+        autograd.back_prop_detail(dgnnClient, model, graph_train.id_new2old_dict, graph_train.train_vertices, epoch,
+                                  graph_train.adj, graph_train)
         end_bp_manu = time.time()
         context.glContext.time_epoch['backward_m']+=(end_bp_manu-start_bp_manu)
 

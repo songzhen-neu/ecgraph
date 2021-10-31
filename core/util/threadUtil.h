@@ -8,6 +8,7 @@
 #include <condition_variable>
 #include <unistd.h>
 #include <mutex>
+#include <vector>
 using namespace std;
 
 class ThreadUtil {
@@ -42,6 +43,10 @@ public:
     static condition_variable cv_accuracy; // 全局条件变量.
 
     static mutex mtx_gcompensate;
+
+    static int count_compress_thread[30];
+    static mutex mtx_thread;
+//    static mutex mtx_compress_thread[100];
 
 
 

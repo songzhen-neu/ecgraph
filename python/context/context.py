@@ -19,11 +19,11 @@ class Context(object):
         'id': -1,
         'worker_address': worker_address,
         'master_address': None,
-        'server_num': 3,
-        'worker_num': 3,
+        'server_num': 2,
+        'worker_num': 2,
         'lr': 0.01,
 
-        'print_result_interval': 5,
+        'print_result_interval': 1,
         'nb_heads': 8,
         'alpha': 0.2,
 
@@ -40,14 +40,15 @@ class Context(object):
 
         'data_path': '/mnt/data/cora/',
         'raw_data_path': '/mnt/data_raw/cora/',
-        'hidden': [256,256],
+        'hidden': [16],
         'data_num': 2708,
         'feature_dim': 1433,
         'class_num': 7,
         'edge_num': 5278,
-        'train_num': 1408,  # 140
+        'train_num': 140,  # 140
         'val_num': 300,
         'test_num': 1000,
+        'neigh_sam':[1,5],
 
         # 'data_path': '/mnt/data/ogbn-papers100M',
         # 'raw_data_path':'/mnt/data_raw/ogbn-papers100M',
@@ -73,7 +74,7 @@ class Context(object):
 
         # 'data_path': '/mnt/data/pubmed',
         # 'raw_data_path':'/mnt/data/pubmed',
-        # 'hidden': [256,256,256],
+        # 'hidden': [16],
         # 'data_num': 19717,
         # 'feature_dim': 500,
         # 'class_num': 3,
@@ -84,20 +85,20 @@ class Context(object):
 
         # 'data_path': '/mnt/data/test',
         # 'raw_data_path':'/mnt/data/test',
-        # 'hidden': [16,16],
+        # 'hidden': [16],
         # 'data_num': 10,
         # 'feature_dim': 2,
         # 'class_num': 2,
         # 'edge_num':20,
-        # 'train_num':6,
-        # 'val_num':2,
+        # 'train_num':2,
+        # 'val_num':6,
         # 'test_num':2,
 
         'master_id': 0,
         # 'firstHopForWorkers': [],
-        'ifCompress': True,
-        'isChangeRate': True,
-        'isChangeBitNum': True,
+        'ifCompress': False,
+        'isChangeRate': False,
+        'isChangeBitNum': False,
         'trend': 10,
         'bitNum': 2,  # 2,4,8,16bits分别对应桶数2,14,254,65534
         'ifMomentum': False,
@@ -105,12 +106,13 @@ class Context(object):
         'emb_dims':[],
         'iterNum': 3000,
         'firstProp': True,
-        'ifBackPropCompress': True,
-        'ifBackPropCompensate': True,
+        'ifBackPropCompress': False,
+        'ifBackPropCompensate': False,
         'bitNum_backProp': 4,
         'changeRateMode': 'select',  # select or normal
         'partitionMethod': 'hash',  # hash,metis
-        'distgnn_r': 1
+        'distgnn_r': 1,
+        'prune_layer':2
         # accorMix 前k-1层 compensates by Layer, the last layer compensates by Iteration;
         # accorMix2 the first k-1 compensates by Iteration, the last layer pass the complete data_raw
         # accorMix3 前n轮Mix2，从第n+1轮开始按迭代轮
@@ -123,6 +125,7 @@ class Context(object):
     global dgnnClientRouterForCpp
     global newToOldMap
     global oldToNewMap
+    time_epoch={}
     weights = {}
     bias = {}
     weightForServer = {}
@@ -130,6 +133,7 @@ class Context(object):
     parametersForServer = {}
     gradients = {}
     gradientsForServer = {}
+    firstHopFeature=None
 
     # server 2001 worker 3001 master 4001
     def ipInit(self, servers, workers, master):
@@ -150,6 +154,15 @@ class Context(object):
                 self.worker_address[i] = workers[i]
                 self.server_address[i] = servers[i]
                 self.config['master_address'] = master
+        self.time_epoch['set_embs']=0
+        self.time_epoch['get_embs']=0
+        self.time_epoch['trans_embs_dict']=0
+        self.time_epoch['forward']=0
+        self.time_epoch['backward']=0
+        self.time_epoch['backward_m']=0
+        self.time_epoch['update']=0
+        self.time_epoch['set_g']=0
+        self.time_epoch['get_g']=0
             # self.server_ip = "219.216.64.103"
             # self.master_ip = "219.216.64.103"
             # for i in range(worker_num):

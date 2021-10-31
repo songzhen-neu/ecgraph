@@ -14,6 +14,9 @@ mutex ThreadUtil::mtx_sendNode;
 
 mutex ThreadUtil::mtx_gcompensate;
 
+int ThreadUtil::count_compress_thread[30];
+//mutex ThreadUtil::mtx_compress_thread[100];
+mutex ThreadUtil::mtx_thread;
 mutex ThreadUtil::mtx_initParameter;
 bool ThreadUtil::ready_initParameter= false;
 

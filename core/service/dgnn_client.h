@@ -146,7 +146,7 @@ public:
 
 
     static void* worker_pull_needed_emb_parallel(void* metaData);
-
+    static void* worker_pull_needed_emb_parallel_fb(void* metaData);
     py::array_t<float> worker_pull_emb_compress(
             py::array_t<int>& needed_emb_set,bool ifcompensate,int layerId,int epoch,
             const string& compensateMethod,int bucketNum,int changeToIter,int workerId,int layerNum,int bitNum);
@@ -210,8 +210,13 @@ public:
 
     py::array_t<float> server_aggGrad(int worker_id, int server_id,float lr,const string& key, py::array_t<float>& grad);
 
-
+    void sendNode(int layid,py::array_t<int> list);
+    py::array_t<int> pullNode(int layid);
 //    void set_embs_byNumply()
+
+    void setCtxForCpp(vector<vector<int>> &request_nodes, int worker_id, const map<int,int> &oldToNewMap, int worker_num,
+                    bool iscompress,bool ischangerate,int bits,int local_node_size,int trend,const vector<int> &emb_nodes,int laynum,
+                      bool iscompress_bp,bool ischangerate_bp,int bits_bp);
 };
 
 struct ReqEmbsMetaData{

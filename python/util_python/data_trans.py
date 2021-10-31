@@ -221,7 +221,6 @@ def load_datav2(dgnnClient):
     # for id in adjs_from_server.keys():
     #     adjs_from_server[id].add(id)
 
-
     worker_contains_nodes = dgnnClient.nodesForEachWorker
     nodes_in_worker = {}
 
@@ -252,9 +251,14 @@ def load_datav2(dgnnClient):
     idx_val = rand_indices[train_num:train_num + val_num]
     idx_test = rand_indices[train_num + val_num:train_num + val_num + test_num]
 
-    all_train_node_set = all_agg_node_num(nodes_from_server, idx_train, idx_val, idx_test, adjs_from_server)
-    # all_train_node_set=sorted(all_train_node_set)
+    idx_train_old = [nodes_from_server[i] for i in idx_train]
 
+    # # all_train_node_set = all_agg_node_num(nodes_from_server, idx_train, idx_val, idx_test, adjs_from_server)
+    # start_get_train=time.time()
+    # all_train_node_set, train_local = all_agg_node_num_all(nodes_from_server, idx_train, adjs_from_server)
+    # end_get_train=time.time()
+    # print('get train time:{:.4f}'.format(end_get_train-start_get_train))
+    idx_train_for_test=idx_train
 
     # build the first-hop neighboring set (containing the local and remote neighbors)
     first_hop_set = set()
@@ -263,7 +267,7 @@ def load_datav2(dgnnClient):
             first_hop_set.add(int(neighbor_id))
 
     # first_hop_set_for_workers = context.glContext.config['firstHopForWorkers']
-    first_hop_set_for_workers=[]
+    first_hop_set_for_workers = []
     for i in range(context.glContext.config['worker_num']):
         first_hop_set_for_workers.append(list())
     for id in first_hop_set:
@@ -321,48 +325,278 @@ def load_datav2(dgnnClient):
     feat_data = torch.FloatTensor(np.array(feat_data.todense()))
     labels = torch.LongTensor(labels)
 
-    graph_full = Graph(nodes_from_server, feat_data,  labels,adjs, id_old2new_map, id_new2old_map,
+    graph_full = Graph(nodes_from_server, feat_data, labels, adjs, id_old2new_map, id_new2old_map,
                        first_hop_set_for_workers)
+    #
+    # # 构建train的graph
+    # train_node_old_id = train_local
+    # train_node_old_id = sorted(train_node_old_id)
+    #
+    # # idx_train_r = []
+    # # r = context.glContext.config['distgnn_r']
+    # # num_per_r = int(len(idx_train) / r)
+    #
+    # # for i in range(r):
+    # #     if i < r - 1:
+    # #         idx_train_r.append(train_node_old_id[i * num_per_r:(i + 1) * num_per_r])
+    # #     else:
+    # #         idx_train_r.append(train_node_old_id[i * num_per_r:])
+    #
+    # first_hop_set_train = set()
+    # # idx_train:
+    # for vid in train_node_old_id:
+    #     for nid in adjs_from_server[vid]:
+    #         if nid in all_train_node_set:
+    #             first_hop_set_train.add(int(nid))
+    #
+    # first_hop_set_for_workers_train = []
+    # for i in range(context.glContext.config['worker_num']):
+    #     first_hop_set_for_workers_train.append(list())
+    #
+    #
+    # for id in first_hop_set_train:
+    #     workerId = nodes_in_worker[id]
+    #     first_hop_set_for_workers_train[workerId].append(id)
+    #
+    #
+    #
+    # # transform set to numpy ndarray
+    # for i in range(len(first_hop_set_for_workers_train)):
+    #     first_hop_set_for_workers_train[i] = np.array(sorted(first_hop_set_for_workers_train[i]))
+    #
+    #
+    # # 将feature的dict转化成list
+    # feat_data_train = []
+    # id_old2new_map_train = {}
+    # id_new2old_map_train = {}
+    # count_train = 0
+    # for item in train_node_old_id:
+    #     feat_data_train.append(feats_from_server[item])
+    #     id_old2new_map_train[item] = count_train
+    #     id_new2old_map_train[count_train] = item
+    #     count_train += 1
+    #
+    # # 对一阶邻居编码
+    # for vid in train_node_old_id:
+    #     for neibor_id in adjs_from_server[vid]:
+    #         if neibor_id not in id_old2new_map_train.keys():
+    #             if neibor_id in all_train_node_set:
+    #                 id_old2new_map_train[neibor_id] = count_train
+    #                 id_new2old_map_train[count_train] = neibor_id
+    #                 # feat_data_train.append(feats_from_server[neibor_id])
+    #                 count_train += 1
+    #
+    # # context.glContext.newToOldMap = id_new2old_map
+    # # context.glContext.oldToNewMap = id_old2new_map
+    #
+    # # 将顶点按照id_old2new_map转化
+    # nodes_train = [id_old2new_map_train[i] for i in train_node_old_id]
+    #
+    # idx_train=[id_old2new_map_train[i] for i in idx_train_old]
+    #
+    # # 将邻接表按照id_old2new_map转化
+    # # 将标签按照id_old2new_map转换
+    # adjs_train = []
+    # labels_train = []
+    # for new_id in range(len(train_node_old_id)):
+    #     old_id = id_new2old_map_train[new_id]
+    #     if old_id in all_train_node_set:
+    #         neibor_set_old = adjs_from_server[old_id]
+    #         neibor_set_new = []
+    #         # 转化labels
+    #         labels_train.append(labels_from_server[old_id])
+    #
+    #         for item in neibor_set_old:
+    #             if item in all_train_node_set:
+    #                 neibor_set_new.append(id_old2new_map_train[item])
+    #         adjs_train.append(neibor_set_new)
+    #
+    # labels_train = np.array(labels_train)
+    #
+    # feat_data_train = sp.csr_matrix(feat_data_train, dtype=np.float32)
+    #
+    # feat_data_train = torch.FloatTensor(np.array(feat_data_train.todense()))
+    # labels_train = torch.LongTensor(labels_train)
+    # graph_train = Graph(train_node_old_id, feat_data_train, labels_train,
+    #                     adjs_train, id_old2new_map_train, id_new2old_map_train, first_hop_set_for_workers_train)
 
-    # 构建train的graph
-    train_node_old_id=[id_new2old_map[i] for i in idx_train]
-    train_node_old_id=sorted(train_node_old_id)
+    idx_train = torch.LongTensor(idx_train)
+    idx_val = torch.LongTensor(idx_val)
+    idx_test = torch.LongTensor(idx_test)
 
-    idx_train_r=[]
-    r=context.glContext.config['distgnn_r']
-    num_per_r=int(len(idx_train)/r)
-    for i in range(r):
-        if i<r-1:
-            idx_train_r.append(train_node_old_id[i*num_per_r:(i+1)*num_per_r])
-        else:
-            idx_train_r.append(train_node_old_id[i*num_per_r:])
-
-
-
-    first_hop_set_train_r=[]
-    for id_r in range(r):
-        first_hop_set_train_r.append(set())
-        for vid in idx_train_r[id_r]:
-            for nid in adjs_from_server[vid]:
-                if nid in all_train_node_set:
-                    first_hop_set_train_r[id_r].add(int(nid))
+    return {'idx_val': idx_val,
+            'idx_train': idx_train,
+            'idx_test': idx_test,
+            'idx_train_for_test':idx_train,
+            'train_ratio': train_ratio,
+            'test_ratio': test_ratio,
+            'val_ratio': val_ratio,
+            'train_num': train_num,
+            'test_num': test_num,
+            'val_num': val_num,
+            'graph_full': graph_full,}
+            # 'graph_train': graph_train}
 
 
-    first_hop_set_for_workers_train_r=[]
-    for id_r in range(r):
-        first_hop_set_for_workers_train_r.append([])
-        for i in range(context.glContext.config['worker_num']):
-            first_hop_set_for_workers_train_r[id_r].append(list())
+def load_data_sample(dgnnClient):
+    isRandomData = True
+    np.random.seed(2)
+    random.seed(2)
+    # 这里读取的都是按照master统一编号的,
+    nodes_from_server = dgnnClient.nodes
+    feats_from_server = dgnnClient.features
+    labels_from_server = dgnnClient.labels
+    adjs_from_server = dgnnClient.adjs
 
-    for id_r in range(r):
-        for id in first_hop_set_train_r[id_r]:
-            workerId = nodes_in_worker[id]
-            first_hop_set_for_workers_train_r[id_r][workerId].append(id)
+
+
+    # # add self-recurrent
+    # for id in adjs_from_server.keys():
+    #     adjs_from_server[id].add(id)
+
+    worker_contains_nodes = dgnnClient.nodesForEachWorker
+    nodes_in_worker = {}
+
+    # dgnnClient.freeSpace()
+
+    # build
+    for i in range(context.glContext.config['worker_num']):
+        for j in range(len(worker_contains_nodes[i])):
+            nodes_in_worker[worker_contains_nodes[i][j]] = i
+
+    dgnnClient.layerNum = context.glContext.config['layerNum']
+    data_num = len(nodes_from_server)
+
+    train_ratio = context.glContext.config['train_num'] / context.glContext.config['data_num']
+    val_ratio = context.glContext.config['val_num'] / context.glContext.config['data_num']
+    test_ratio = context.glContext.config['test_num'] / context.glContext.config['data_num']
+
+    train_num = int(data_num * train_ratio)
+    val_num = int(data_num * val_ratio)
+    test_num = int(data_num * test_ratio)
+
+    if isRandomData:
+        rand_indices = np.random.permutation(data_num)  # 随机索引
+    else:
+        rand_indices = np.arange(data_num)
+    # idx_train 本地full graph newly encoding
+    idx_train = rand_indices[0:train_num]
+    idx_val = rand_indices[train_num:train_num + val_num]
+    idx_test = rand_indices[train_num + val_num:train_num + val_num + test_num]
+
+    idx_train_old = [nodes_from_server[i] for i in idx_train]
+
+    # all_train_node_set = all_agg_node_num(nodes_from_server, idx_train, idx_val, idx_test, adjs_from_server)
+    # start_get_train=time.time()
+
+    # end_get_train=time.time()
+    # print('get train time:{:.4f}'.format(end_get_train-start_get_train))
+
+    # idx_train_for_test=idx_train
+
+    # build the first-hop neighboring set (containing the local and remote neighbors)
+    first_hop_set = set()
+    for neighbor_set in adjs_from_server:
+        for neighbor_id in adjs_from_server[neighbor_set]:
+            first_hop_set.add(int(neighbor_id))
+
+    # first_hop_set_for_workers = context.glContext.config['firstHopForWorkers']
+    first_hop_set_for_workers = []
+    for i in range(context.glContext.config['worker_num']):
+        first_hop_set_for_workers.append(list())
+    for id in first_hop_set:
+        workerId = nodes_in_worker[id]
+        first_hop_set_for_workers[workerId].append(id)
 
     # transform set to numpy ndarray
-    for id_r in range(r):
-        for i in range(len(first_hop_set_for_workers_train_r[id_r])):
-            first_hop_set_for_workers_train_r[id_r][i] = np.array(sorted(first_hop_set_for_workers_train_r[id_r][i]))
+    for i in range(len(first_hop_set_for_workers)):
+        first_hop_set_for_workers[i] = np.array(first_hop_set_for_workers[i])
+
+    # 将feature的dict转化成list
+    feat_data = []
+    id_old2new_map = {}
+    id_new2old_map = {}
+    count = 0
+    for item in feats_from_server.keys():
+        feat_data.append(feats_from_server[item])
+        id_old2new_map[item] = count
+        id_new2old_map[count] = item
+        count += 1
+
+    # 对一阶邻居编码
+    for vid in adjs_from_server:
+        for neibor_id in adjs_from_server[vid]:
+            if neibor_id not in id_old2new_map.keys():
+                id_old2new_map[neibor_id] = count
+                id_new2old_map[count] = neibor_id
+                count += 1
+
+    context.glContext.newToOldMap = id_new2old_map
+    context.glContext.oldToNewMap = id_old2new_map
+
+    # 将顶点按照id_old2new_map转化
+    nodes = [id_old2new_map[i] for i in nodes_from_server]
+
+    # 将邻接表按照id_old2new_map转化
+    # 将标签按照id_old2new_map转换
+    adjs = []
+    labels = []
+    for new_id in range(data_num):
+        old_id = id_new2old_map[new_id]
+        neibor_set_old = adjs_from_server[old_id]
+        neibor_set_new = []
+        # 转化labels
+        labels.append(labels_from_server[old_id])
+
+        for item in neibor_set_old:
+            neibor_set_new.append(id_old2new_map[item])
+        adjs.append(neibor_set_new)
+
+    labels = np.array(labels)
+
+    feat_data = sp.csr_matrix(feat_data, dtype=np.float32)
+
+    feat_data = torch.FloatTensor(np.array(feat_data.todense()))
+    labels = torch.LongTensor(labels)
+
+    graph_full = Graph(nodes_from_server, feat_data, labels, adjs, id_old2new_map, id_new2old_map,
+                       first_hop_set_for_workers)
+
+
+    # sample the neighbors
+    for key in adjs_from_server:
+        if len(adjs_from_server[key])<=context.glContext.config['neigh_sam'][0]:
+            pass
+        else:
+            adjs_from_server[key]=set(list(adjs_from_server[key])[0:context.glContext.config['neigh_sam'][0]])
+
+    all_train_node_set, train_local = all_agg_node_num_all(nodes_from_server, idx_train, adjs_from_server)
+    train_node_old_id = train_local
+    train_node_old_id = sorted(train_node_old_id)
+
+
+    first_hop_set_train = set()
+    # idx_train:
+    for vid in train_node_old_id:
+        for nid in adjs_from_server[vid]:
+            if nid in all_train_node_set:
+                first_hop_set_train.add(int(nid))
+
+    first_hop_set_for_workers_train = []
+    for i in range(context.glContext.config['worker_num']):
+        first_hop_set_for_workers_train.append(list())
+
+
+    for id in first_hop_set_train:
+        workerId = nodes_in_worker[id]
+        first_hop_set_for_workers_train[workerId].append(id)
+
+
+
+    # transform set to numpy ndarray
+    for i in range(len(first_hop_set_for_workers_train)):
+        first_hop_set_for_workers_train[i] = np.array(sorted(first_hop_set_for_workers_train[i]))
+
 
     # 将feature的dict转化成list
     feat_data_train = []
@@ -378,7 +612,7 @@ def load_datav2(dgnnClient):
     # 对一阶邻居编码
     for vid in train_node_old_id:
         for neibor_id in adjs_from_server[vid]:
-            if neibor_id not in id_old2new_map_train.keys() :
+            if neibor_id not in id_old2new_map_train.keys():
                 if neibor_id in all_train_node_set:
                     id_old2new_map_train[neibor_id] = count_train
                     id_new2old_map_train[count_train] = neibor_id
@@ -390,6 +624,8 @@ def load_datav2(dgnnClient):
 
     # 将顶点按照id_old2new_map转化
     nodes_train = [id_old2new_map_train[i] for i in train_node_old_id]
+
+    idx_train=[id_old2new_map_train[i] for i in idx_train_old]
 
     # 将邻接表按照id_old2new_map转化
     # 将标签按照id_old2new_map转换
@@ -415,17 +651,16 @@ def load_datav2(dgnnClient):
     feat_data_train = torch.FloatTensor(np.array(feat_data_train.todense()))
     labels_train = torch.LongTensor(labels_train)
     graph_train = Graph(train_node_old_id, feat_data_train, labels_train,
-                        adjs_train, id_old2new_map_train, id_new2old_map_train,first_hop_set_for_workers_train_r)
-
+                        adjs_train, id_old2new_map_train, id_new2old_map_train, first_hop_set_for_workers_train)
 
     idx_train = torch.LongTensor(idx_train)
     idx_val = torch.LongTensor(idx_val)
     idx_test = torch.LongTensor(idx_test)
 
-
     return {'idx_val': idx_val,
             'idx_train': idx_train,
             'idx_test': idx_test,
+            'idx_train_for_test':idx_train,
             'train_ratio': train_ratio,
             'test_ratio': test_ratio,
             'val_ratio': val_ratio,
@@ -434,7 +669,6 @@ def load_datav2(dgnnClient):
             'val_num': val_num,
             'graph_full': graph_full,
             'graph_train': graph_train}
-
 
 # Yu
 def all_agg_node_num(nodes_from_server, idx_train, idx_val, idx_test, adj_lists_from_server):
@@ -470,5 +704,58 @@ def all_agg_node_num(nodes_from_server, idx_train, idx_val, idx_test, adj_lists_
     print("get all test node!")
 
     all_train_nodes_set = set(all_train_nodes)
+
     # 返回所有需要聚合的顶点
     return all_train_nodes_set
+
+
+def get_needed_nodes(layid, adj, nodes,local_node_all):
+    nodes_new = []
+    for id in nodes:
+        if local_node_all.__contains__(id):
+            nodes_new.append(id)
+            nodes_new.extend(adj[id])
+            # for nei in adj[id]:
+            #     nodes_new.add(nei)
+    # nodes_new = list(nodes_new)
+    context.glContext.dgnnServerRouter[0].sendNode(layid, nodes_new)
+    context.glContext.dgnnServerRouter[0].server_Barrier(0)  # 等待所有节点都上传完训练节点
+    nodes_new_all = context.glContext.dgnnServerRouter[0].pullNode(layid)
+    return set(nodes_new_all)
+
+
+def all_agg_node_num_all(nodes_from_server, idx_train, adj_lists_from_server):
+    # 划分节点
+    real_train_num = [nodes_from_server[i] for i in idx_train]
+    local_node_all=set(nodes_from_server)
+
+    worker_id = context.glContext.config['id']
+    context.glContext.dgnnServerRouter[0].sendTrainNode(worker_id, real_train_num)  # 传输训练节点
+    print("send train node finish")
+
+    context.glContext.dgnnServerRouter[0].server_Barrier(0)  # 等待所有节点都上传完训练节点
+    print("waiting other worker send node...")
+
+    all_train_nodes = context.glContext.dgnnServerRouter[0].pullTrainNode()  # 获得所有的训练节点
+    context.glContext.dgnnServerRouter[0].server_Barrier(0)  # 等待所有节点都上传完训练节点
+    print("get all train node!")
+
+    all_train_nodes_set = set(all_train_nodes)
+    # get needed vertices for each layer
+    needed_nodes = []
+    needed_nodes.append(all_train_nodes_set)
+
+    for i in range(context.glContext.config['layerNum']):
+        needed_nodes_layer = get_needed_nodes(i + 1, adj_lists_from_server, needed_nodes[i],local_node_all)
+        needed_nodes.append(needed_nodes_layer)
+
+    localNode = []
+    needed_nodes_layer=needed_nodes[context.glContext.config['prune_layer'] ]
+    # needed_nodes_layer=needed_nodes[1]
+    nodes_set=set(nodes_from_server)
+    for i in needed_nodes_layer:
+        if nodes_set.__contains__(i):
+            localNode.append(i)
+
+    # 返回所有需要聚合的顶点
+    return needed_nodes_layer, localNode

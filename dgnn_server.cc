@@ -218,7 +218,56 @@ Status ServiceImpl::freeMaster(ServerContext *context, const BoolMessage *reques
 
 static void const addaaa();
 
+
 Status ServiceImpl::workerPullEmb(
+        ServerContext *context, const EmbMessage *request, EmbMessage *reply) {
+    // 这里请求的nodes的顺序和返回的tensor的顺序要保持一致
+//    clock_t start = clock();
+    string mode = "none"; // mom mv none
+
+    struct timeval t1, t2;
+    double timeuse;
+    gettimeofday(&t1, NULL);
+
+
+    int feat_size = request->shapedim();
+    int layerId = request->layerid();
+    int epoch = request->epoch();
+    int workerId = request->workerid();
+    int nodeNum = request->nodes_size();
+
+    float *embs = WorkerStore::embs_ptr;
+
+//    map<int, vector<float>> embs;
+
+
+    reply->set_shapedim(feat_size);
+    reply->set_resp_node_size(nodeNum);
+    reply->set_resp_featdim_size(feat_size);
+
+
+    auto *mutable_emb_reply = reply->mutable_resp_none_compress_emb_concat();
+    mutable_emb_reply->Reserve(nodeNum * feat_size);
+
+    for (int i = 0; i < nodeNum; i++) {
+        int oid = request->nodes(i);
+        int nid = WorkerStore::oid2nid_embs[oid];
+//        cout<<"old:"<<oid<<",nid:"<<nid<<endl;
+        mutable_emb_reply->Add(embs + nid * feat_size, embs + (nid + 1) * feat_size);
+//        for(int j=0;j<feat_size;j++){
+//            mutable_emb_reply->Add(embs[nid*feat_size+j]);
+//        }
+    }
+//    reply->set_allocated_denseembmessage(reqEmbMessage);
+    gettimeofday(&t2, NULL);
+    timeuse = t2.tv_sec - t1.tv_sec + (t2.tv_usec - t1.tv_usec) / 1000000.0;
+//    cout << "server processing emb time:" << timeuse << endl;
+
+
+    return Status::OK;
+}
+
+Status ServiceImpl::workerPullEmb_fb(
         ServerContext *context, const EmbMessage *request, EmbMessage *reply) {
     // 这里请求的nodes的顺序和返回的tensor的顺序要保持一致
 //    clock_t start = clock();
@@ -250,30 +299,9 @@ Status ServiceImpl::workerPullEmb(
     for (int i = 0; i < nodeNum; i++) {
         int id = request->nodes(i);
         auto &emb_nodeid = embs_ws[id];
-
-
         mutable_emb_reply->Add(emb_nodeid.begin(), emb_nodeid.end());
-//        for (int j = 0; j < feat_size; j++) {
-//            reply->add_resp_none_compress_emb_concat(emb_nodeid[j]);
-//
-//        }
+
     }
-
-
-//    for (int i = 0; i < nodeNum; i++) {
-//        TensorMessage *tensor_temp = reqEmbMessage->add_embs();
-//        int id = request->nodes(i);
-//        auto &emb_nodeid = embs_ws[id];
-//
-//        for (int j = 0; j < feat_size; j++) {
-//            tensor_temp->add_tensor(emb_nodeid[j]);
-//
-//        }
-//
-//    }
-
-
-
 //    reply->set_allocated_denseembmessage(reqEmbMessage);
     gettimeofday(&t2, NULL);
     timeuse = t2.tv_sec - t1.tv_sec + (t2.tv_usec - t1.tv_usec) / 1000000.0;
@@ -283,35 +311,23 @@ Status ServiceImpl::workerPullEmb(
     return Status::OK;
 }
 
-
 Status ServiceImpl::workerPullG(
         ServerContext *context, const EmbMessage *request, EmbMessage *reply) {
     // 这里请求的nodes的顺序和返回的tensor的顺序要保持一致
 //    cout<<"***********G_map size:"<<WorkerStore::G_map.size()<<",G2 size:"<<WorkerStore::G_map[2].size()<<endl;
-    auto &G = WorkerStore::G_map[request->layerid()];
+//    auto &G = WorkerStore::G_map[request->layerid()];
+    float *G = WorkerStore::g_ptr;
 //    map<int, vector<float>> G;
-    int featSize = G.begin()->second.size();
+    int featSize = request->shapedim();
     int nodeNum = request->nodes_size();
 
-//    for (int i = 0; i < nodeNum; i++) {
-//        vector<float> vec(dimNum);
-//        int id = request->nodes(i);
-//        auto &G_layerId_nodeId = G_layerId[id];
-//        for (int j = 0; j < dimNum; j++) {
-//            vec[j] = G_layerId_nodeId[j];
-//        }
-//        G.insert(pair<int, vector<float>>(id, vec));
-//    }
-
+    auto *mutable_g_relpy = reply->mutable_resp_none_compress_emb_concat();
+    mutable_g_relpy->Reserve(nodeNum * featSize);
     for (int i = 0; i < nodeNum; i++) {
-//        TensorMessage *tensor_temp = reply->add_embs();
-        int id = request->nodes(i);
-//        tensor_temp->set_vid(id);
-        auto &G_layerId_nodeId = G[id];
-        reply->mutable_resp_none_compress_emb_concat()->Add(G_layerId_nodeId.begin(), G_layerId_nodeId.end());
-//        for (int j = 0; j < dimNum; j++) {
-//            tensor_temp->add_tensor(G_layerId_nodeId[j]);
-//        }
+        int oid = request->nodes(i);
+        int nid = WorkerStore::oid2nid_g[oid];
+        mutable_g_relpy->Add(G + nid * featSize, G + (nid + 1) * featSize);
+
     }
 
     reply->set_resp_featdim_size(featSize);
@@ -319,6 +335,34 @@ Status ServiceImpl::workerPullG(
 
     return Status::OK;
 }
+
+
+//Status ServiceImpl::workerPullG(
+//        ServerContext *context, const EmbMessage *request, EmbMessage *reply) {
+//    // 这里请求的nodes的顺序和返回的tensor的顺序要保持一致
+////    cout<<"***********G_map size:"<<WorkerStore::G_map.size()<<",G2 size:"<<WorkerStore::G_map[2].size()<<endl;
+//    auto &G = WorkerStore::G_map[request->layerid()];
+////    map<int, vector<float>> G;
+//    int featSize = G.begin()->second.size();
+//    int nodeNum = request->nodes_size();
+//
+//
+//    for (int i = 0; i < nodeNum; i++) {
+////        TensorMessage *tensor_temp = reply->add_embs();
+//        int id = request->nodes(i);
+////        tensor_temp->set_vid(id);
+//        auto &G_layerId_nodeId = G[id];
+//        reply->mutable_resp_none_compress_emb_concat()->Add(G_layerId_nodeId.begin(), G_layerId_nodeId.end());
+////        for (int j = 0; j < dimNum; j++) {
+////            tensor_temp->add_tensor(G_layerId_nodeId[j]);
+////        }
+//    }
+//
+//    reply->set_resp_featdim_size(featSize);
+//    reply->set_resp_node_size(nodeNum);
+//
+//    return Status::OK;
+//}
 
 
 int getDimBucket(const vector<Bucket> &buckets, float dim, float min_value, float max_value, float interval) {
@@ -345,8 +389,8 @@ int getDimBucket(const vector<Bucket> &buckets, float dim, float min_value, floa
                     return bucketid;
                 } else {
 //                    cout<<"dim22222222:"<<dim<<",bucketid:"<<bucketid<<endl;
-                    if(bucketid+1>=16){
-                        cout<<"errrrrrrrrrrrrrrrr"<<endl;
+                    if (bucketid + 1 >= 16) {
+                        cout << "errrrrrrrrrrrrrrrr" << endl;
                     }
                     return bucketid + 1;
                 }
@@ -1563,12 +1607,13 @@ void compressData_concat(int bitNum, vector<uint> &itemVector,
 }
 
 
-
-void compress1BitG(const EmbMessage *request, EmbMessage *reply){
-    int layerid=request->layerid();
-    auto &g = WorkerStore::G_map[layerid];
-    auto min_value = WorkerStore::g_min[layerid];
-    auto max_value = WorkerStore::g_max[layerid];
+void compress1BitG(const EmbMessage *request, EmbMessage *reply) {
+    int layerid = request->layerid();
+//    auto &g = WorkerStore::G_map[layerid];
+//    auto min_value = WorkerStore::g_min[layerid];
+//    auto max_value = WorkerStore::g_max[layerid];
+    auto min_value = WorkerStore::g_min_ptr;
+    auto max_value = WorkerStore::g_max_ptr;
     vector<Bucket> buckets;
     Bucket b0{};
     b0.bid = 0;
@@ -1585,8 +1630,6 @@ void compress1BitG(const EmbMessage *request, EmbMessage *reply){
     buckets.push_back(b1);
     reply->add_values(b1.value);
 
-//    cout << "max_min_value:" << max_value << "," << min_value << endl;
-    reply->set_shapedim(g.begin()->second.size());
 
     int nodeNum = request->nodes_size();
     reply->set_resp_node_size(nodeNum);
@@ -1594,7 +1637,8 @@ void compress1BitG(const EmbMessage *request, EmbMessage *reply){
     // 开始构建压缩后的张量
     int oneIntDimNum = 32 / bitNum;
     vector<uint> itemsVec(oneIntDimNum);
-    int feat_size = g.begin()->second.size();
+    int feat_size = request->shapedim();
+    reply->set_shapedim(feat_size);
 
     int left_num = feat_size % oneIntDimNum;
     int compress_dim_size;
@@ -1612,10 +1656,10 @@ void compress1BitG(const EmbMessage *request, EmbMessage *reply){
     uint compressValue = 0;
     for (int n = 0; n < nodeNum; n++) {
         auto id = request->nodes(n);
+        int nid = WorkerStore::oid2nid_g[id];
         uint bucket_id;
-        auto &g_second = g[id];
         for (uint i = 0; i < feat_size; i++) {
-            float dim = g_second[i];
+            float dim = WorkerStore::g_ptr[nid * feat_size + i];
             if (dim >= 0) {
                 bucket_id = 1;
             } else {
@@ -1638,44 +1682,62 @@ void compress1BitG(const EmbMessage *request, EmbMessage *reply){
     reply->set_resp_featdim_size(compress_dim_size);
 }
 
-void initGCompensate(int layerid){
-    map<int,vector<float>>tmp;
-    WorkerStore::G_compensate.insert(pair<int,map<int,vector<float>>>(layerid,tmp));
+void initGCompensate(int layerid) {
+    map<int, vector<float>> tmp;
+    WorkerStore::G_compensate.insert(pair<int, map<int, vector<float>>>(layerid, tmp));
 }
 
-void gCompensate1Bit(const EmbMessage* request,EmbMessage* reply){
+void gCompensate1Bit(const EmbMessage *request, EmbMessage *reply) {
     // no errors are compensated, however, 0-th epoch need to compute the errors
-    int epoch=request->epoch();
-    int layerid=request->layerid();
-    map<int,vector<float>> g_tmp;
-    auto &g_compensate_layerid=WorkerStore::G_compensate[layerid];
-    auto &g = WorkerStore::G_map[layerid];
-    auto min_value = WorkerStore::g_min[layerid];
-    auto max_value = WorkerStore::g_max[layerid];
-    if(epoch==0){
+    int epoch = request->epoch();
+    int layerid = request->layerid();
+    int feat_size=request->shapedim();
+    map<int, vector<float>> g_tmp;
+    float* g=WorkerStore::g_ptr;
+    auto &g_compensate_layerid = WorkerStore::G_compensate[layerid];
+//    auto &g = WorkerStore::G_map[layerid];
+//    auto min_value = WorkerStore::g_min[layerid];
+//    auto max_value = WorkerStore::g_max[layerid];
+    auto min_value = WorkerStore::g_min_ptr;
+    auto max_value = WorkerStore::g_max_ptr;
+    if (epoch == 0) {
         initGCompensate(layerid);
-        g_tmp=g;
+//        g_tmp = g;
+        for (int i = 0; i < request->nodes_size(); i++) {
+            auto id = request->nodes(i);
+            int nid=WorkerStore::oid2nid_g[id];
+            vector<float> g_nodei_tmp(feat_size);
+            for (int j = 0; j < feat_size; j++) {
+                g_nodei_tmp[j] = g[nid*feat_size+j];
+            }
+            if (g_tmp.count(id) == 0) {
+                g_tmp.insert(pair<int, vector<float>>(id, g_nodei_tmp));
+            } else {
+                g_tmp[id] = g_nodei_tmp;
+            }
+        }
     }
-    if(epoch!=0){
+    if (epoch != 0) {
         // need to be compensated
-        for(int i=0;i<request->nodes_size();i++){
-            auto id= request->nodes(i);
-            auto g_nodei=g[id];
-            auto& g_comp_nodei=g_compensate_layerid[id];
-            int size=g_nodei.size();
-            vector<float> g_nodei_tmp(size);
-            for(int j=0;j<size;j++){
-                g_nodei_tmp[j]=g_nodei[j]+g_comp_nodei[j];
-                if(g_nodei_tmp[j]>max_value){
-                    max_value=g_nodei_tmp[j];
-                }else if(g_nodei_tmp[j]<min_value){
-                    min_value=g_nodei_tmp[j];
+        for (int i = 0; i < request->nodes_size(); i++) {
+            auto id = request->nodes(i);
+            int nid=WorkerStore::oid2nid_g[id];
+//            auto g_nodei = g[id];
+            auto &g_comp_nodei = g_compensate_layerid[id];
+//            int size = g_nodei.size();
+            vector<float> g_nodei_tmp(feat_size);
+            for (int j = 0; j < feat_size; j++) {
+                g_nodei_tmp[j] = g[nid*feat_size+j] + g_comp_nodei[j];
+                if (g_nodei_tmp[j] > max_value) {
+                    max_value = g_nodei_tmp[j];
+                } else if (g_nodei_tmp[j] < min_value) {
+                    min_value = g_nodei_tmp[j];
                 }
             }
-            if(g_tmp.count(id)==0){
-                g_tmp.insert(pair<int,vector<float>>(id,g_nodei_tmp));
-            }else{
-                g_tmp[id]=g_nodei_tmp;
+            if (g_tmp.count(id) == 0) {
+                g_tmp.insert(pair<int, vector<float>>(id, g_nodei_tmp));
+            } else {
+                g_tmp[id] = g_nodei_tmp;
             }
         }
     }
@@ -1705,7 +1767,6 @@ void gCompensate1Bit(const EmbMessage* request,EmbMessage* reply){
     // 开始构建压缩后的张量
     int oneIntDimNum = 32 / bitNum;
     vector<uint> itemsVec(oneIntDimNum);
-    int feat_size = g_tmp.begin()->second.size();
 
     int left_num = feat_size % oneIntDimNum;
     int compress_dim_size;
@@ -1731,9 +1792,9 @@ void gCompensate1Bit(const EmbMessage* request,EmbMessage* reply){
                 bucket_id = 0;
             }
 
-            float dim_compress=buckets[bucket_id].value;
-            float error=dim - dim_compress;
-            errors_for_noden[i]=error;
+            float dim_compress = buckets[bucket_id].value;
+            float error = dim - dim_compress;
+            errors_for_noden[i] = error;
 
             uint itemId = i % oneIntDimNum;
             compressValue = compressValue | (bucket_id << (32 - (itemId + 1) * bitNum));
@@ -1746,10 +1807,10 @@ void gCompensate1Bit(const EmbMessage* request,EmbMessage* reply){
         }
         unique_lock<mutex> lock1(ThreadUtil::mtx_gcompensate);
 
-        if(g_compensate_layerid.count(id)==0){
-            g_compensate_layerid.insert(pair<int,vector<float>>(id,errors_for_noden));
-        } else{
-            g_compensate_layerid[id]=errors_for_noden;
+        if (g_compensate_layerid.count(id) == 0) {
+            g_compensate_layerid.insert(pair<int, vector<float>>(id, errors_for_noden));
+        } else {
+            g_compensate_layerid[id] = errors_for_noden;
         }
 
 
@@ -1766,40 +1827,56 @@ void gCompensate1Bit(const EmbMessage* request,EmbMessage* reply){
 }
 
 
-void gCompensateBits(const EmbMessage* request,EmbMessage* reply){
+void gCompensateBits(const EmbMessage *request, EmbMessage *reply) {
     // no errors are compensated, however, 0-th epoch need to compute the errors
-    int epoch=request->epoch();
-    int layerid=request->layerid();
-    map<int,vector<float>> g_tmp;
-    auto &g_compensate_layerid=WorkerStore::G_compensate[layerid];
-    auto &g = WorkerStore::G_map[layerid];
-    auto min_value = WorkerStore::g_min[layerid];
-    auto max_value = WorkerStore::g_max[layerid];
-    if(epoch==0){
+    int epoch = request->epoch();
+    int layerid = request->layerid();
+    map<int, vector<float>> g_tmp;
+    auto &g_compensate_layerid = WorkerStore::G_compensate[layerid];
+//    auto &g = WorkerStore::G_map[layerid];
+//    auto min_value = WorkerStore::g_min[layerid];
+//    auto max_value = WorkerStore::g_max[layerid];
+    auto &g = WorkerStore::g_ptr;
+    auto min_value = WorkerStore::g_min_ptr;
+    auto max_value = WorkerStore::g_max_ptr;
+    int feat_size=request->shapedim();
+    if (epoch == 0) {
         initGCompensate(layerid);
-        g_tmp=g;
+        for (int i = 0; i < request->nodes_size(); i++) {
+            auto id = request->nodes(i);
+            int nid=WorkerStore::oid2nid_g[id];
+            vector<float> g_nodei_tmp(feat_size);
+            for (int j = 0; j < feat_size; j++) {
+                g_nodei_tmp[j] = g[nid*feat_size+j];
+            }
+            if (g_tmp.count(id) == 0) {
+                g_tmp.insert(pair<int, vector<float>>(id, g_nodei_tmp));
+            } else {
+                g_tmp[id] = g_nodei_tmp;
+            }
+        }
     }
 
-    if(epoch!=0){
+    if (epoch != 0) {
         // need to be compensated
-        for(int i=0;i<request->nodes_size();i++){
-            auto id= request->nodes(i);
-            auto& g_nodei=g[id];
-            auto& g_comp_nodei=g_compensate_layerid[id];
-            int size=g_nodei.size();
-            vector<float> g_nodei_tmp(size);
-            for(int j=0;j<size;j++){
-                g_nodei_tmp[j]=g_nodei[j]+g_comp_nodei[j];
-                if(g_nodei_tmp[j]>max_value){
-                    max_value=g_nodei_tmp[j];
-                }else if(g_nodei_tmp[j]<min_value){
-                    min_value=g_nodei_tmp[j];
+        for (int i = 0; i < request->nodes_size(); i++) {
+            auto id = request->nodes(i);
+            int nid=WorkerStore::oid2nid_g[id];
+//            auto &g_nodei = g[id];
+            auto &g_comp_nodei = g_compensate_layerid[id];
+            vector<float> g_nodei_tmp(feat_size);
+            for (int j = 0; j < feat_size; j++) {
+                g_nodei_tmp[j] = g[nid*feat_size+j] + g_comp_nodei[j];
+                if (g_nodei_tmp[j] > max_value) {
+                    max_value = g_nodei_tmp[j];
+                } else if (g_nodei_tmp[j] < min_value) {
+                    min_value = g_nodei_tmp[j];
                 }
             }
-            if(g_tmp.count(id)==0){
-                g_tmp.insert(pair<int,vector<float>>(id,g_nodei_tmp));
-            }else{
-                g_tmp[id]=g_nodei_tmp;
+            if (g_tmp.count(id) == 0) {
+                g_tmp.insert(pair<int, vector<float>>(id, g_nodei_tmp));
+            } else {
+                g_tmp[id] = g_nodei_tmp;
             }
 
         }
@@ -1887,7 +1964,6 @@ void gCompensateBits(const EmbMessage* request,EmbMessage* reply){
     // 开始构建压缩后的张量
     int oneIntDimNum = 32 / bitNum;
     vector<uint> itemsVec(oneIntDimNum);
-    int feat_size = g_tmp.begin()->second.size();
 
     int left_num = feat_size % oneIntDimNum;
     int compress_dim_size;
@@ -1916,9 +1992,9 @@ void gCompensateBits(const EmbMessage* request,EmbMessage* reply){
                     bucket_id += 1;
                 }
             }
-            float dim_compress=buckets[bucket_id].value;
-            float error=dim - dim_compress;
-            errors_for_noden[i]=error;
+            float dim_compress = buckets[bucket_id].value;
+            float error = dim - dim_compress;
+            errors_for_noden[i] = error;
 
             uint itemId = i % oneIntDimNum;
 
@@ -1935,10 +2011,10 @@ void gCompensateBits(const EmbMessage* request,EmbMessage* reply){
 
         unique_lock<mutex> lock1(ThreadUtil::mtx_gcompensate);
 
-        if(g_compensate_layerid.count(id)==0){
-            g_compensate_layerid.insert(pair<int,vector<float>>(id,errors_for_noden));
-        } else{
-            g_compensate_layerid[id]=errors_for_noden;
+        if (g_compensate_layerid.count(id) == 0) {
+            g_compensate_layerid.insert(pair<int, vector<float>>(id, errors_for_noden));
+        } else {
+            g_compensate_layerid[id] = errors_for_noden;
         }
         lock1.unlock();
 //            cout<<endl;
@@ -1952,24 +2028,27 @@ void gCompensateBits(const EmbMessage* request,EmbMessage* reply){
 }
 
 
-void compensate1BitG(const EmbMessage *request, EmbMessage *reply){
-    int epoch=request->epoch();
-    int layerid=request->layerid();
-    gCompensate1Bit(request,reply);
+void compensate1BitG(const EmbMessage *request, EmbMessage *reply) {
+    int epoch = request->epoch();
+    int layerid = request->layerid();
+    gCompensate1Bit(request, reply);
 }
 
-void compensateBitsG(const EmbMessage *request, EmbMessage *reply){
-    int epoch=request->epoch();
-    int layerid=request->layerid();
-    gCompensateBits(request,reply);
+void compensateBitsG(const EmbMessage *request, EmbMessage *reply) {
+    int epoch = request->epoch();
+    int layerid = request->layerid();
+    gCompensateBits(request, reply);
     // compensate for g
 }
 
 void compress1BitEmbs(const EmbMessage *request, EmbMessage *reply) {
     // -1,1
-    auto &embs = WorkerStore::embs;
+//    auto &embs = WorkerStore::embs;
+    float *embs = WorkerStore::embs_ptr;
+
     auto min_value = WorkerStore::embs_min;
     auto max_value = WorkerStore::embs_max;
+    int feat_size = request->shapedim();
     vector<Bucket> buckets;
     Bucket b0{};
     b0.bid = 0;
@@ -1988,7 +2067,7 @@ void compress1BitEmbs(const EmbMessage *request, EmbMessage *reply) {
     reply->add_values(b1.value);
 
 //    cout << "max_min_value:" << max_value << "," << min_value << endl;
-    reply->set_shapedim(embs.begin()->second.size());
+    reply->set_shapedim(feat_size);
 
     int nodeNum = request->nodes_size();
     reply->set_resp_node_size(nodeNum);
@@ -1996,8 +2075,6 @@ void compress1BitEmbs(const EmbMessage *request, EmbMessage *reply) {
     // 开始构建压缩后的张量
     int oneIntDimNum = 32 / bitNum;
     vector<uint> itemsVec(oneIntDimNum);
-    int feat_size = embs.begin()->second.size();
-
 
     int left_num = feat_size % oneIntDimNum;
     int compress_dim_size;
@@ -2015,10 +2092,10 @@ void compress1BitEmbs(const EmbMessage *request, EmbMessage *reply) {
     uint compressValue = 0;
     for (int n = 0; n < nodeNum; n++) {
         auto id = request->nodes(n);
+        int nid = WorkerStore::oid2nid_embs[id];
         uint bucket_id;
-        auto &emb_second = embs[id];
         for (uint i = 0; i < feat_size; i++) {
-            float dim = emb_second[i];
+            float dim = embs[nid * feat_size + i];
             if (dim >= 0) {
                 bucket_id = 1;
             } else {
@@ -2043,13 +2120,16 @@ void compress1BitEmbs(const EmbMessage *request, EmbMessage *reply) {
 }
 
 void compressBitsG(const EmbMessage *request, EmbMessage *reply) {
-    int layerid=request->layerid();
-    auto &g = WorkerStore::G_map[layerid];
-    auto min_value = WorkerStore::g_min[layerid];
-    auto max_value = WorkerStore::g_max[layerid];
+    int layerid = request->layerid();
+//    auto &g = WorkerStore::G_map[layerid];
+//    auto min_value = WorkerStore::g_min[layerid];
+//    auto max_value = WorkerStore::g_max[layerid];
+    auto min_value = WorkerStore::g_min_ptr;
+    auto max_value = WorkerStore::g_max_ptr;
     vector<Bucket> buckets;
     bool ifCrossZero = false;
     int bucket_num;
+    int feat_size=request->shapedim();
     int bitNum = request->bitnum();
     if (max_value > 0 && min_value < 0) {
         ifCrossZero = true;
@@ -2060,7 +2140,7 @@ void compressBitsG(const EmbMessage *request, EmbMessage *reply) {
         bucket_num = pow(2, bitNum) - 1;
     }
 //    cout << "max_min_value:" << max_value << "," << min_value << endl;
-    reply->set_shapedim(g.begin()->second.size());
+    reply->set_shapedim(feat_size);
 
     double interval = (max_value - min_value) / (double) (bucket_num);
     int int_interval = (int) (interval * pow(10, 8));
@@ -2129,7 +2209,7 @@ void compressBitsG(const EmbMessage *request, EmbMessage *reply) {
     // 开始构建压缩后的张量
     int oneIntDimNum = 32 / bitNum;
     vector<uint> itemsVec(oneIntDimNum);
-    int feat_size = g.begin()->second.size();
+
 
     int left_num = feat_size % oneIntDimNum;
     int compress_dim_size;
@@ -2147,10 +2227,10 @@ void compressBitsG(const EmbMessage *request, EmbMessage *reply) {
     uint compressValue = 0;
     for (int n = 0; n < nodeNum; n++) {
         auto id = request->nodes(n);
+        int nid=WorkerStore::oid2nid_g[id];
         uint bucket_id;
-        auto &g_second = g[id];
         for (uint i = 0; i < feat_size; i++) {
-            float dim = g_second[i];
+            float dim = WorkerStore::g_ptr[nid*feat_size+i];
             if (dim == 0) {
                 bucket_id = bucketSize - 1;
             } else if (!ifCrossZero) {
@@ -2183,17 +2263,112 @@ void compressBitsG(const EmbMessage *request, EmbMessage *reply) {
     reply->set_resp_featdim_size(compress_dim_size);
 
 
+}
+
+struct compParallelArg{
+    float *data;
+    int thread_id;
+    int thread_num;
+    int nodeNum;
+    int featsize;
+    int bucketSize;
+    int ifCrossZero;
+    float min_value;
+    float interval;
+    int oneIntDimNum;
+    int left_num;
+    int bitNum;
+    int compress_dim_size;
+    const EmbMessage *request;
+
+
+};
+
+void* compressEmbs_p(void *args_p){
+    auto* args=(compParallelArg *) args_p;
+    auto* data=args->data;
+    int thread_id=args->thread_id;
+    int nodeNum=args->nodeNum;
+    auto* request=args->request;
+    int thread_num=args->thread_num;
+    int feat_size=args->featsize;
+    auto * embs=WorkerStore::embs_ptr;
+    auto bucketSize=args->bucketSize;
+    auto ifCrossZero=args->ifCrossZero;
+    auto min_value=args->min_value;
+    auto interval=args->interval;
+    auto oneIntDimNum=args->oneIntDimNum;
+    auto left_num=args->left_num;
+    auto bitNum=args->bitNum;
+    auto compress_dim_size=args->compress_dim_size;
+
+    int nodenum_thread=(int) (nodeNum/thread_num);
+    int start_id=thread_id*nodenum_thread;
+    int end_id=0; // not include the end_id [start,end)
+    uint compressValue = 0;
+    if(thread_id!=(thread_num-1)){
+        end_id=(thread_id+1)*nodenum_thread;
+    }else{
+        end_id=nodeNum;
+    }
+
+    for (int n = start_id; n < end_id; n++) {
+        auto id = request->nodes(n);
+        int nid = WorkerStore::oid2nid_embs[id];
+        uint bucket_id;
+        for (uint i = 0; i < feat_size; i++) {
+            float dim = embs[nid * feat_size + i];
+            if (dim == 0) {
+                bucket_id = bucketSize - 1;
+            } else if (!ifCrossZero) {
+                bucket_id = (int) ((dim - min_value) / interval);
+            } else {
+                bucket_id = (int) ((dim - min_value) / interval);
+                if (dim > 0) {
+                    bucket_id += 1;
+                }
+            }
+            uint itemId = i % oneIntDimNum;
+
+            compressValue = compressValue | (bucket_id << (32 - (itemId + 1) * bitNum));
+//                compressValue=0;
+
+            if (itemId == (oneIntDimNum - 1)) {
+//                    compressData_concat(bitNum, itemsVec, mutable_emb_reply);
+//                mutable_emb_reply->Add(compressValue);
+                int i_comp=(int) (i/oneIntDimNum);
+                data[n*compress_dim_size+i_comp]=compressValue;
+
+                compressValue = 0;
+            }
+
+        }
+//            cout<<endl;
+        if (left_num != 0) {
+//            mutable_emb_reply->Add(compressValue);
+            int i_comp=(int) (feat_size/oneIntDimNum);
+            data[n*compress_dim_size+i_comp]=compressValue;
+            compressValue = 0;
+        }
+    }
+    unique_lock<mutex> lck(ThreadUtil::mtx_thread);
+    ThreadUtil::count_compress_thread[request->workerid()]++;
+    lck.unlock();
+    return NULL;
 }
 
 
 void compressBitsEmbs(const EmbMessage *request, EmbMessage *reply) {
-    auto &embs = WorkerStore::embs;
+//    auto &embs = WorkerStore::embs;
+    float *embs = WorkerStore::embs_ptr;
     auto min_value = WorkerStore::embs_min;
     auto max_value = WorkerStore::embs_max;
+    int threadNum=4;
     vector<Bucket> buckets;
     bool ifCrossZero = false;
     int bucket_num;
     int bitNum = request->bitnum();
+    int feat_size = request->shapedim();
     if (max_value > 0 && min_value < 0) {
         ifCrossZero = true;
     }
@@ -2203,7 +2378,7 @@ void compressBitsEmbs(const EmbMessage *request, EmbMessage *reply) {
         bucket_num = pow(2, bitNum) - 1;
     }
 //    cout << "max_min_value:" << max_value << "," << min_value << endl;
-    reply->set_shapedim(embs.begin()->second.size());
+    reply->set_shapedim(feat_size);
 
     double interval = (max_value - min_value) / (double) (bucket_num);
     int int_interval = (int) (interval * pow(10, 8));
@@ -2272,7 +2447,6 @@ void compressBitsEmbs(const EmbMessage *request, EmbMessage *reply) {
     // 开始构建压缩后的张量
     int oneIntDimNum = 32 / bitNum;
     vector<uint> itemsVec(oneIntDimNum);
-    int feat_size = embs.begin()->second.size();
 
     int left_num = feat_size % oneIntDimNum;
     int compress_dim_size;
@@ -2290,10 +2464,10 @@ void compressBitsEmbs(const EmbMessage *request, EmbMessage *reply) {
     uint compressValue = 0;
     for (int n = 0; n < nodeNum; n++) {
         auto id = request->nodes(n);
+        int nid=WorkerStore::oid2nid_embs[id];
         uint bucket_id;
-        auto &emb_second = embs[id];
         for (uint i = 0; i < feat_size; i++) {
-            float dim = emb_second[i];
+            float dim = embs[nid*feat_size+i];
             if (dim == 0) {
                 bucket_id = bucketSize - 1;
             } else if (!ifCrossZero) {
@@ -2324,9 +2498,142 @@ void compressBitsEmbs(const EmbMessage *request, EmbMessage *reply) {
     }
 
     reply->set_resp_featdim_size(compress_dim_size);
-
-
 }
+
+//void compressBitsEmbs(const EmbMessage *request, EmbMessage *reply) {
+////    auto &embs = WorkerStore::embs;
+//    float *embs = WorkerStore::embs_ptr;
+//    auto min_value = WorkerStore::embs_min;
+//    auto max_value = WorkerStore::embs_max;
+//    int threadNum=4;
+//    vector<Bucket> buckets;
+//    bool ifCrossZero = false;
+//    int bucket_num;
+//    int bitNum = request->bitnum();
+//    int feat_size = request->shapedim();
+//    if (max_value > 0 && min_value < 0) {
+//        ifCrossZero = true;
+//    }
+//    if (ifCrossZero) {
+//        bucket_num = pow(2, bitNum) - 2;
+//    } else {
+//        bucket_num = pow(2, bitNum) - 1;
+//    }
+////    cout << "max_min_value:" << max_value << "," << min_value << endl;
+//    reply->set_shapedim(feat_size);
+//
+//    double interval = (max_value - min_value) / (double) (bucket_num);
+//    int int_interval = (int) (interval * pow(10, 8));
+//    int int_interval_addone = int_interval + 1;
+//    interval = int_interval_addone / pow(10, 8);
+//
+//    if (ifCrossZero) {
+//        // bucket_num是interval的个数，而不是真正的bucket number
+//        int bucket_count = 0;
+//        for (int i = 0; i < bucket_num; i++) {
+//            // 从第0个区间开始，到bucket_num-1个区间结束,这里的i都是左编号
+//            if (interval * i <= 0 && interval * (i + 1) >= 0) {
+//                Bucket b_left{};
+//                b_left.bid = bucket_count;
+//                b_left.lower_bound = min_value + interval * i;
+//                b_left.upper_bound = 0;
+//                b_left.value = (b_left.lower_bound + b_left.upper_bound) / 2;
+//                buckets.push_back(b_left);
+//                reply->add_values(b_left.value);
+//                bucket_count++;
+//
+//                Bucket b_right{};
+//                b_right.bid = bucket_count;
+//                b_right.lower_bound = 0;
+//                b_right.upper_bound = min_value + interval * (i + 1);
+//                b_right.value = (b_right.lower_bound + b_right.upper_bound) / 2;
+//                buckets.push_back(b_right);
+//                reply->add_values(b_right.value);
+//                bucket_count++;
+//            } else {
+//                Bucket b{};
+//                b.bid = bucket_count;
+//                b.lower_bound = min_value + interval * i;
+//                b.upper_bound = min_value + interval * (i + 1);
+//                b.value = (b.lower_bound + b.upper_bound) / 2;
+//                buckets.push_back(b);
+//                reply->add_values(b.value);
+//                bucket_count++;
+//            }
+//
+//        }
+//    } else {
+//        for (int i = 0; i < bucket_num; i++) {
+//            Bucket b;
+//            b.bid = i;
+//            b.lower_bound = min_value + interval * i;
+//            b.upper_bound = min_value + interval * (i + 1);
+//            b.value = (b.lower_bound + b.upper_bound) / 2;
+//            buckets.push_back(b);
+//            reply->add_values(b.value);
+//        }
+//    }
+//
+//    Bucket b;
+//    b.bid = buckets.size();
+//    b.lower_bound = 0;
+//    b.upper_bound = 0;
+//    b.value = 0;
+//    buckets.push_back(b);
+//    reply->add_values(0);
+//
+//    int bucketSize = buckets.size();
+//    int nodeNum = request->nodes_size();
+//    reply->set_resp_node_size(nodeNum);
+//
+//    // 开始构建压缩后的张量
+//    int oneIntDimNum = 32 / bitNum;
+//    vector<uint> itemsVec(oneIntDimNum);
+//
+//    int left_num = feat_size % oneIntDimNum;
+//    int compress_dim_size;
+//    if (left_num == 0) {
+//        compress_dim_size = feat_size / oneIntDimNum;
+//    } else {
+//        compress_dim_size = feat_size / oneIntDimNum + 1;
+//    }
+//    auto *mutable_emb_reply = reply->mutable_resp_compress_emb_concat();
+//    mutable_emb_reply->Reserve(nodeNum * compress_dim_size);
+////        vector<uint> vec_emb(nodeNum*compress_dim_size);
+////        mutable_emb_reply->Add(vec_emb.begin(),vec_emb.end());
+//
+////        auto& bitMap=WorkerStore::bucketPositionBitMap;
+//    auto* emb_array=new float[nodeNum*compress_dim_size];
+//
+//    for(int i=0;i<threadNum;i++){
+//        pthread_t p;
+//        auto* arg=new compParallelArg;
+//        arg->data=emb_array;
+//        arg->thread_id=i;
+//        arg->nodeNum=nodeNum;
+//        arg->request=request;
+//        arg->thread_num=threadNum;
+//        arg->featsize=feat_size;
+//        arg->bucketSize=bucketSize;
+//        arg->ifCrossZero=ifCrossZero;
+//        arg->min_value=min_value;
+//        arg->interval=interval;
+//        arg->oneIntDimNum=oneIntDimNum;
+//        arg->left_num=left_num;
+//        arg->bitNum=bitNum;
+//        arg->compress_dim_size=compress_dim_size;
+//        pthread_create(&p,NULL,compressEmbs_p,(void *) arg);
+//    }
+//
+//    while(ThreadUtil::count_compress_thread[request->workerid()]==threadNum){
+//        break;
+//    }
+//    ThreadUtil::count_compress_thread[request->workerid()]=0;
+//
+//    mutable_emb_reply->Add(emb_array,emb_array+nodeNum*compress_dim_size);
+//
+//    reply->set_resp_featdim_size(compress_dim_size);
+//}
 
 void compressEmbs(const EmbMessage *request, EmbMessage *reply) {
     // 开始对需要的嵌入进行压缩,先进行基于range的压缩，scaling factor
@@ -2351,29 +2658,48 @@ void compressEmbs(const EmbMessage *request, EmbMessage *reply) {
 
 }
 
-void compressG(const EmbMessage *request, EmbMessage *reply){
+void compressG(const EmbMessage *request, EmbMessage *reply) {
     int bitNum = request->bitnum();
     // 1-bit compression is special, which cannot be divided into 3 parts when cross zero
-    bool ifcompensate=request->ifcompensate();
+    bool ifcompensate = request->ifcompensate();
 //    cout<<"bitnum:"<<bitNum<<endl;
 
-    if(!ifcompensate){
+    if (!ifcompensate) {
         if (bitNum == 1) {
             compress1BitG(request, reply);
         } else {
             // 如果bitnum不是1，那么至少有3个（实际4个）个桶，可以包含+-0
             compressBitsG(request, reply);
         }
-    }else{
+    } else {
         if (bitNum == 1) {
             compensate1BitG(request, reply);
         } else {
-            compensateBitsG(request,reply);
+            compensateBitsG(request, reply);
 
         }
     }
 
 }
+
+//Status ServiceImpl::workerPullEmbCompress(ServerContext *context, const EmbMessage *request,
+//                                          EmbMessage *reply) {
+////    clock_t start_time_total = clock();
+//
+//    struct timeval t1, t2;
+//    double timeuse;
+//    gettimeofday(&t1, NULL);
+//
+//    compressEmbs(request, reply);
+//
+//    gettimeofday(&t2, NULL);
+//    timeuse = t2.tv_sec - t1.tv_sec + (t2.tv_usec - t1.tv_usec) / 1000000.0;
+////    cout << "server processing time:" << timeuse << "s" << endl;
+//
+//
+//    return Status::OK;
+//
+//}
 
 Status ServiceImpl::workerPullEmbCompress(ServerContext *context, const EmbMessage *request,
                                           EmbMessage *reply) {
@@ -2395,7 +2721,7 @@ Status ServiceImpl::workerPullEmbCompress(ServerContext *context, const EmbMessa
 }
 
 Status ServiceImpl::workerPullGCompress(ServerContext *context, const EmbMessage *request,
-                                          EmbMessage *reply) {
+                                        EmbMessage *reply) {
 //    clock_t start_time_total = clock();
 
     struct timeval t1, t2;
@@ -2461,20 +2787,20 @@ Status ServiceImpl::initParameter(ServerContext *context, const NetInfoMessage *
         ServerStore::feat_dim = feat_dim;
         ServerStore::class_dim = class_dim;
         ServerStore::hid_dims = hid_dims;
-        for(int i=0;i<request->params_size();i++){
-            int size_elem=request->params(i).elems_size();
+        for (int i = 0; i < request->params_size(); i++) {
+            int size_elem = request->params(i).elems_size();
             vector<float> tmp(size_elem);
             vector<float> tmp2(size_elem);
             vector<float> tmp3(size_elem);
             vector<float> tmp4(size_elem);
-            auto& param_i=request->params(i);
-            for(int j=0;j<size_elem;j++){
-                tmp[j]=param_i.elems(j);
+            auto &param_i = request->params(i);
+            for (int j = 0; j < size_elem; j++) {
+                tmp[j] = param_i.elems(j);
             }
-            ServerStore::params.insert(pair<string,vector<float>>(param_i.id(),tmp));
-            ServerStore::grads_agg.insert(pair<string,vector<float>>(param_i.id(),tmp2));
-            ServerStore::m_grads_t.insert(pair<string,vector<float>>(param_i.id(),tmp3));
-            ServerStore::v_grads_t.insert(pair<string,vector<float>>(param_i.id(),tmp4));
+            ServerStore::params.insert(pair<string, vector<float>>(param_i.id(), tmp));
+            ServerStore::grads_agg.insert(pair<string, vector<float>>(param_i.id(), tmp2));
+            ServerStore::m_grads_t.insert(pair<string, vector<float>>(param_i.id(), tmp3));
+            ServerStore::v_grads_t.insert(pair<string, vector<float>>(param_i.id(), tmp4));
         }
 
 
@@ -3155,7 +3481,7 @@ int getIndexWithMinError(float v0, float v1, float v2) {
 //    return 2;
 }
 
-void compress1BitEmbsTrend(const EmbMessage *request, EmbMessage *reply, map<int, vector<float>> &embs) {
+void compress1BitEmbsTrend(const EmbMessage *request, EmbMessage *reply, float *embs) {
     vector<Bucket> buckets;
     auto min_value = WorkerStore::embs_min;
     auto max_value = WorkerStore::embs_max;
@@ -3164,7 +3490,7 @@ void compress1BitEmbsTrend(const EmbMessage *request, EmbMessage *reply, map<int
     int layerId = request->layerid();
     int epoch = request->epoch();
     int trend = request->trend();
-
+    int feat_size = request->shapedim();
 
     Bucket b0{};
     b0.bid = 0;
@@ -3183,8 +3509,7 @@ void compress1BitEmbsTrend(const EmbMessage *request, EmbMessage *reply, map<int
     reply->add_values(b1.value);
 
 //    cout << "max_min_value:" << max_value << "," << min_value << endl;
-    reply->set_shapedim(embs.begin()->second.size());
-    int feat_size = embs.begin()->second.size();
+    reply->set_shapedim(feat_size);
     int nodeNum = request->nodes_size();
     reply->set_resp_node_size(nodeNum);
 
@@ -3218,22 +3543,20 @@ void compress1BitEmbsTrend(const EmbMessage *request, EmbMessage *reply, map<int
     auto last_embs = WorkerStore::embs_last[workerId][layerId];
     auto rates = WorkerStore::embs_change_rate[workerId][layerId];
     reply->mutable_value_select_flags()->Reserve(nodeNum);
-
     for (int n = 0; n < nodeNum; n++) {
         auto id = request->nodes(n);
+        auto nid = WorkerStore::oid2nid_embs[id];
         uint bucket_id;
         // the non-error embs
-        auto &emb_second = embs[id];
         auto last_embs_node = last_embs[id];
         auto rates_node = rates[id];
         float comp_error = 0;
         float pred_error = 0;
         float mix_error = 0;
-
         vector<uint> vec_feat_comp_tmp(compress_dim_size);
 
         for (uint i = 0; i < feat_size; i++) {
-            float dim = emb_second[i];
+            float dim = embs[nid * feat_size + i];
             if (dim >= 0) {
                 bucket_id = 1;
             } else {
@@ -3251,7 +3574,6 @@ void compress1BitEmbsTrend(const EmbMessage *request, EmbMessage *reply, map<int
                 predDim = round * rates_node[i] + last_embs_node[i];
             }
             float mixDim = (predDim + compDim) / 2;
-
 
             comp_error += abs(compDim - dim);
             pred_error += abs(predDim - dim);
@@ -3288,7 +3610,6 @@ void compress1BitEmbsTrend(const EmbMessage *request, EmbMessage *reply, map<int
             mutable_emb_reply->Add(vec_feat_comp_tmp.begin(), vec_feat_comp_tmp.end());
 
         }
-
         uint itemId_node = n % 16;
         compressNode = compressNode | (index_WithMinError << (32 - (itemId_node + 1) * 2));
         if (itemId_node == (16 - 1)) {
@@ -3303,7 +3624,6 @@ void compress1BitEmbsTrend(const EmbMessage *request, EmbMessage *reply, map<int
         compressNode = 0;
     }
 
-
     reply->set_resp_featdim_size(compress_dim_size);
     if (layerId == 0) {
         reply->set_comp_data_percent(0);
@@ -3316,7 +3636,7 @@ void compress1BitEmbsTrend(const EmbMessage *request, EmbMessage *reply, map<int
 
 }
 
-void compressBitsEmbsTrend(const EmbMessage *request, EmbMessage *reply, map<int, vector<float>> &embs) {
+void compressBitsEmbsTrend(const EmbMessage *request, EmbMessage *reply, float *embs) {
     // 发送压缩嵌入
     vector<Bucket> buckets;
     auto min_value = WorkerStore::embs_min;
@@ -3329,7 +3649,7 @@ void compressBitsEmbsTrend(const EmbMessage *request, EmbMessage *reply, map<int
 
     bool ifCrossZero = false;
     int bucket_num;
-    int feat_size=embs.begin()->second.size();
+    int feat_size = request->shapedim();
     if (max_value > 0 && min_value < 0) {
         ifCrossZero = true;
     }
@@ -3338,7 +3658,7 @@ void compressBitsEmbsTrend(const EmbMessage *request, EmbMessage *reply, map<int
     } else {
         bucket_num = pow(2, bitNum) - 1;
     }
-    reply->set_shapedim(embs.begin()->second.size());
+    reply->set_shapedim(feat_size);
 
     double interval = (max_value - min_value) / (double) (bucket_num);
     uint int_interval = (int) (interval * pow(10, 8));
@@ -3437,9 +3757,9 @@ void compressBitsEmbsTrend(const EmbMessage *request, EmbMessage *reply, map<int
 
     for (int n = 0; n < nodeNum; n++) {
         auto id = request->nodes(n);
+        int nid = WorkerStore::oid2nid_embs[id];
         uint bucket_id;
         // the non-error embs
-        auto &emb_second = embs[id];
         auto last_embs_node = last_embs[id];
         auto rates_node = rates[id];
         float comp_error = 0;
@@ -3451,7 +3771,7 @@ void compressBitsEmbsTrend(const EmbMessage *request, EmbMessage *reply, map<int
 
 
         for (uint i = 0; i < feat_size; i++) {
-            float dim = emb_second[i];
+            float dim = embs[nid * feat_size + i];
             if (dim == 0) {
                 bucket_id = bucketSize - 1;
             } else if (!ifCrossZero) {
@@ -3542,10 +3862,8 @@ Status ServiceImpl::workerPullEmbTrendSelect(
     int layerId = request->layerid();
     int trend = request->trend();
     int workerId = request->workerid();
-
-
-    int feat_size = WorkerStore::embs.begin()->second.size();
-    auto &embs = WorkerStore::embs;
+    int feat_size = request->shapedim();
+    float *embs = WorkerStore::embs_ptr;
 
     int bitNum = request->bitnum();
 
@@ -3569,15 +3887,21 @@ Status ServiceImpl::workerPullEmbTrendSelect(
                 pair<int, map<int, map<int, vector<float >> >>(workerId, changeRateForWorkerI));
         WorkerStore::embs_change_rate[workerId].insert(pair<int, map<int, vector<float>>>(layerId, embs_change));
         for (auto id:request->nodes()) {
+            int nid = WorkerStore::oid2nid_embs[id];
             vector<float> vec_change(feat_size);
-            WorkerStore::embs_last[workerId][layerId].insert(pair<int, vector<float >>(id, embs[id]));
+            vector<float> vec_tmp(feat_size);
+            for (int f = 0; f < feat_size; f++) {
+                vec_tmp[f] = embs[nid * feat_size + f];
+            }
+            WorkerStore::embs_last[workerId][layerId].insert(pair<int, vector<float >>(id, vec_tmp));
             WorkerStore::embs_change_rate[workerId][layerId].insert(pair<int, vector<float >>(id, vec_change));
         }
         int nodeNum = request->nodes_size();
         reply->set_resp_featdim_size(feat_size);
         for (int i = 0; i < nodeNum; i++) {
             int id = request->nodes(i);
-            reply->mutable_resp_none_compress_emb_concat()->Add(embs[id].begin(), embs[id].end());
+            int nid = WorkerStore::oid2nid_embs[id];
+            reply->mutable_resp_none_compress_emb_concat()->Add(embs + nid * feat_size, embs + (nid + 1) * feat_size);
         }
 
     } else {
@@ -3593,20 +3917,23 @@ Status ServiceImpl::workerPullEmbTrendSelect(
             reply->mutable_resp_none_compress_emb_concat()->Reserve(nodeNum * feat_size);
             for (int i = 0; i < nodeNum; i++) {
                 int id = request->nodes(i);
-                reply->mutable_resp_none_compress_emb_concat()->Add(embs[id].begin(), embs[id].end());
-                auto &emb_id = embs[id];
+                int nid = WorkerStore::oid2nid_embs[id];
+                reply->mutable_resp_none_compress_emb_concat()->Add(embs + nid * feat_size,
+                                                                    embs + (nid + 1) * feat_size);
                 auto &emb_last_node = embs_last_layerId[id];
                 auto &embs_change_rate_node = embs_change_rate_layerId[id];
+                vector<float> last_tmp(feat_size);
                 for (int j = 0; j < feat_size; j++) {
-                    float rate_dim = (emb_id[j] - emb_last_node[j]) / (float) (trend - 1);
+                    float rate_dim = (embs[nid * feat_size + j] - emb_last_node[j]) / (float) (trend - 1);
                     reply->mutable_resp_none_compress_rate_concat()->Add(rate_dim);
                     embs_change_rate_node[j] = rate_dim;
-
+                    last_tmp[j] = embs[nid * feat_size + j];
                 }
+                emb_last_node = last_tmp;
 
             }
 
-            embs_last_layerId = embs;
+//            embs_last_layerId = embs;
 
         } else {
             if (bitNum == 1) {
@@ -4025,20 +4352,20 @@ Status ServiceImpl::serverSendTestNode(ServerContext *context, const ContextMess
     return Status::OK;
 }
 
-Status ServiceImpl::server_PullParams(ServerContext *context,const StringM *request, Param* reply){
-    const string& lay_id=request->value();
-    reply->mutable_elems()->Add(ServerStore::params[lay_id].begin(),ServerStore::params[lay_id].end());
+Status ServiceImpl::server_PullParams(ServerContext *context, const StringM *request, Param *reply) {
+    const string &lay_id = request->value();
+    reply->mutable_elems()->Add(ServerStore::params[lay_id].begin(), ServerStore::params[lay_id].end());
     return Status::OK;
 }
 
-Status ServiceImpl::server_updateModels(ServerContext *context, const GradMessage* request, BoolMessage *reply){
+Status ServiceImpl::server_updateModels(ServerContext *context, const GradMessage *request, BoolMessage *reply) {
     if (request->wid() == 0) {
         unique_lock<mutex> lck(ThreadUtil::mtx_updateModels);
         ServerStore::grads_agg[request->grad().id()].clear();
         // vector is initialized as 0 by default
         vector<float> tmp(request->grad().elems_size());
-        ServerStore::grads_agg[request->grad().id()]=tmp;
-        cout<<"********server_updateModels-clear gradient aggregations******"<<endl;
+        ServerStore::grads_agg[request->grad().id()] = tmp;
+        cout << "********server_updateModels-clear gradient aggregations******" << endl;
         ThreadUtil::ready_updateModels = true;
         ThreadUtil::cv_updateModels.notify_all();
     } else {
@@ -4047,22 +4374,22 @@ Status ServiceImpl::server_updateModels(ServerContext *context, const GradMessag
             ThreadUtil::cv_updateModels.wait(lck);
         }
     }
-    int grad_size=request->grad().elems_size();
-    string grad_id=request->grad().id();
+    int grad_size = request->grad().elems_size();
+    string grad_id = request->grad().id();
     float alpha = request->lr();
-    int wid=request->wid();
+    int wid = request->wid();
 
     // 多个worker一起更新参数，先聚合所有worker的梯度
     // 聚合worker的梯度时，先上锁
 //    pthread_mutex_lock(&ThreadUtil::mtx_updateModels_addGrad);
     unique_lock<mutex> lck(ThreadUtil::mtx_updateModels);
 
-    auto& grad_agg=ServerStore::grads_agg[grad_id];
+    auto &grad_agg = ServerStore::grads_agg[grad_id];
     // add gradients to grads_agg
-    for(int i=0;i<grad_size;i++){
-        grad_agg[i]+=grad_agg[i]+request->grad().elems(i);
+    for (int i = 0; i < grad_size; i++) {
+        grad_agg[i] += grad_agg[i] + request->grad().elems(i);
     }
-    cout<<"********server_updateModels----gradient aggregating end******"<<endl;
+    cout << "********server_updateModels----gradient aggregating end******" << endl;
     lck.unlock();
 
     // 每个worker累积完梯度就可以释放锁了
@@ -4083,8 +4410,9 @@ Status ServiceImpl::server_updateModels(ServerContext *context, const GradMessag
 
     // 下面是做check
     if (wid == 0) {
-        cout<<ThreadUtil::count_worker_for_updateModels<<" workers have been added into the gradient aggregations!"<<endl;
-        cout<<"param id:"<<grad_id<<","<<"grad size:"<<grad_agg.size()<<endl;
+        cout << ThreadUtil::count_worker_for_updateModels << " workers have been added into the gradient aggregations!"
+             << endl;
+        cout << "param id:" << grad_id << "," << "grad size:" << grad_agg.size() << endl;
     }
 
     // worker 0线程开始负责更新参数
@@ -4094,20 +4422,20 @@ Status ServiceImpl::server_updateModels(ServerContext *context, const GradMessag
         float beta_2 = 0.999;
         float epsilon = 5e-4;
         bool isAdam = true;
-        auto& m_grads_t=ServerStore::m_grads_t[grad_id];
-        auto& v_grads_t=ServerStore::v_grads_t[grad_id];
-        auto& param=ServerStore::params[grad_id];
+        auto &m_grads_t = ServerStore::m_grads_t[grad_id];
+        auto &v_grads_t = ServerStore::v_grads_t[grad_id];
+        auto &param = ServerStore::params[grad_id];
         // 如果m_weight_t,v_weight_t,m_bias_t,v_bias_t为空，那么初始化
-        for(int i=0;i<grad_size;i++){
-            float g_t=grad_agg[i];
-            if(isAdam){
-                m_grads_t[i]=beta_1* m_grads_t[i]+(1-beta_1)*g_t;
-                v_grads_t[i]=beta_2*v_grads_t[i]+(1-beta_2)*g_t*g_t;
-                float m_cap=m_grads_t[i]/(1-(pow(beta_1,ServerStore::t)));
-                float v_cap=v_grads_t[i]/(1-(pow(beta_2,ServerStore::t)));
-                param[i]-=(alpha*m_cap)/(sqrt(v_cap)+epsilon);
-            }else{
-                param[i]-=alpha*g_t;
+        for (int i = 0; i < grad_size; i++) {
+            float g_t = grad_agg[i];
+            if (isAdam) {
+                m_grads_t[i] = beta_1 * m_grads_t[i] + (1 - beta_1) * g_t;
+                v_grads_t[i] = beta_2 * v_grads_t[i] + (1 - beta_2) * g_t * g_t;
+                float m_cap = m_grads_t[i] / (1 - (pow(beta_1, ServerStore::t)));
+                float v_cap = v_grads_t[i] / (1 - (pow(beta_2, ServerStore::t)));
+                param[i] -= (alpha * m_cap) / (sqrt(v_cap) + epsilon);
+            } else {
+                param[i] -= alpha * g_t;
             }
         }
 
@@ -4178,10 +4506,27 @@ Status ServiceImpl::server_aggGrad(ServerContext *context, const GradMessage *re
     }
 
 
-    auto* grad_message_tmp=reply->grad().New();
-    grad_message_tmp->mutable_elems()->Add(grad_agg.begin(),grad_agg.end());
+    auto *grad_message_tmp = reply->grad().New();
+    grad_message_tmp->mutable_elems()->Add(grad_agg.begin(), grad_agg.end());
     grad_message_tmp->set_id(grad_id);
     reply->set_allocated_grad(grad_message_tmp);
 
+    return Status::OK;
+}
+
+Status ServiceImpl::workerSendNode(ServerContext *context, const NodeMessage *request, BoolMessage *reply) {
+    unique_lock<mutex> lck(ThreadUtil::mtx_sendNode);
+    for (int i = 0; i < request->nodes_size(); i++) {
+        int n = request->nodes(i);
+        ServerStore::nodes[request->layid()].push_back(n);
+    }
+    return Status::OK;
+}
+
+Status ServiceImpl::serverSendNode(ServerContext *context, const NodeMessage *request, NodeMessage *reply) {
+    vector<int> train_nodes = ServerStore::nodes[request->layid()];
+    for (int n : train_nodes) {
+        reply->add_nodes(n);
+    }
     return Status::OK;
 }

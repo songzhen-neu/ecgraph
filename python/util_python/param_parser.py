@@ -28,7 +28,8 @@ def parserInit():
     # parameter for GAT
     parser.add_argument('--nb_heads', type=int, default=8, help='Number of head attentions.')
     parser.add_argument('--alpha', type=float, default=0.2, help='Alpha for the leaky_relu.')
-
+    parser.add_argument('--prune_layer', type=int, default=0, help='prune.')
+    parser.add_argument('--neigh_sam', type=str, help='neigh_sam.')
 
     args = parser.parse_args()
     ifctx_mode=str.split(args.ifctx_mode,',')
@@ -77,6 +78,9 @@ def parserInit():
         context.glContext.config['emb_dims'].extend(context.glContext.config['hidden'])
         context.glContext.config['emb_dims'].append(context.glContext.config['class_num'])
 
+        context.glContext.config['prune_layer']=int(args.prune_layer)
+
+
         # GAT
         context.glContext.config['nb_heads']=int(args.nb_heads)
         context.glContext.config['alpha']=float(args.alpha)
@@ -108,6 +112,9 @@ def parserInit():
             context.glContext.config['isChangeBitNum'] = True
 
         bit_backbit_trend_printepoch=str.split(args.bit_backbit_trend_printepoch,',')
+
+        context.glContext.config['neigh_sam']=str.split(args.neigh_sam,',')
+        context.glContext.config['neigh_sam']=[int(context.glContext.config['neigh_sam'][i]) for i in range(len(context.glContext.config['neigh_sam']))]
         context.glContext.config['bitNum'] = int(bit_backbit_trend_printepoch[0])
         context.glContext.config['bitNum_backProp'] = int(bit_backbit_trend_printepoch[1])
         context.glContext.config['trend'] = int(bit_backbit_trend_printepoch[2])

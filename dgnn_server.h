@@ -87,6 +87,9 @@ public:
     Status workerPullEmb(
             ServerContext* context,const EmbMessage* request,
             EmbMessage* reply) override;
+    Status workerPullEmb_fb(
+            ServerContext* context,const EmbMessage* request,
+            EmbMessage* reply) override;
 
     Status workerPullG(
             ServerContext* context,const EmbMessage* request,
@@ -142,6 +145,9 @@ public:
 
     Status server_PullParams(ServerContext *context, const StringM *request, Param *reply) override;
     Status server_aggGrad(ServerContext *context,const GradMessage *request, GradMessage *reply) override;
+
+    Status workerSendNode(ServerContext *context, const NodeMessage *request, BoolMessage *reply) override;
+    Status serverSendNode(ServerContext *context, const NodeMessage *request, NodeMessage *reply) override;
 
 };
 

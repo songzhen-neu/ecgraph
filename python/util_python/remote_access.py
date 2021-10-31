@@ -100,9 +100,10 @@ def changeCompressBit(comp_percent):
 def pullNeighborG(autograd, nodes, epoch, layerId,graph):
     # 这个函数主要是补全atg.G2
     # 去指定worker获取一阶邻居
-
+    # needed_G_map_from_workers=context.glContext.dgnnClientRouterForCpp.getG(layerId,
+    #                                                                         context.glContext.config['emb_dims'][layerId],epoch)
     needed_G_map_from_workers=context.glContext.dgnnClientRouterForCpp.getG(
-        graph.fsthop_for_worker[epoch%context.glContext.config['distgnn_r']],layerId,
+        graph.fsthop_for_worker,layerId,
         context.glContext.config['id'],
         context.glContext.config['worker_num'],
         context.glContext.config['ifBackPropCompress'],

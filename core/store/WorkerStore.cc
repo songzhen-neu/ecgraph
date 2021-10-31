@@ -15,29 +15,55 @@ map<int, vector<float>> WorkerStore::features;
 map<int, int> WorkerStore::labels;
 map<int, set<int>> WorkerStore::adjs;
 string WorkerStore::testString;
-map<int,vector<float>> WorkerStore::embs;
-map<int,map<int,vector<float>>> WorkerStore::embs_compensate;
-map<int,vector<vector<float>>> WorkerStore::weights;
+map<int, vector<float>> WorkerStore::embs;
+map<int, map<int, vector<float>>> WorkerStore::embs_compensate;
+map<int, vector<vector<float>>> WorkerStore::weights;
 int WorkerStore::layer_num;
-map<int,map<int,vector<float>>> WorkerStore::G_map;
-map<int,map<int,vector<float>>> WorkerStore::G_compensate;
+map<int, map<int, vector<float>>> WorkerStore::G_map;
+map<int, map<int, vector<float>>> WorkerStore::G_compensate;
 vector<bool> WorkerStore::compFlag;
-map<int,map<int,vector<float>>>  WorkerStore::embs_momument;
-map<int,map<int,map<int,vector<float>>> > WorkerStore::embs_last;
-map<int,map<int,map<int,vector<float>>>>  WorkerStore::embs_change_rate;
-map<int,map<int,map<int,vector<float>>>>  WorkerStore::embs_change_rate_worker;
+map<int, map<int, vector<float>>>  WorkerStore::embs_momument;
+map<int, map<int, map<int, vector<float>>> > WorkerStore::embs_last;
+map<int, map<int, map<int, vector<float>>>>  WorkerStore::embs_change_rate;
+map<int, map<int, map<int, vector<float>>>>  WorkerStore::embs_change_rate_worker;
 vector<vector<int>> WorkerStore::nodesForEachWorker;
 double WorkerStore::embs_max;
 double WorkerStore::embs_min;
 vector<vector<uint>> WorkerStore::bucketPositionBitMap;
 
+map<int, int> WorkerStore::oid2nid_embs;
+
 float WorkerStore::comp_percent;
 
-map<int,double> WorkerStore::g_max;
-map<int,double> WorkerStore::g_min;
+double WorkerStore::g_max_ptr;
+double WorkerStore::g_min_ptr;
+map<int, int> WorkerStore::oid2nid_g;
+float *WorkerStore::g_ptr;
+
+map<int, double> WorkerStore::g_max;
+map<int, double> WorkerStore::g_min;
+
+float *WorkerStore::embs_ptr;
+
+
+vector<vector<int>> WorkerStore::request_nodes;
+int WorkerStore::worker_id;
+map<int, int> WorkerStore::oldToNewMap;
+int WorkerStore::worker_num;
+bool WorkerStore::iscompress;
+bool WorkerStore::ischangerate;
+bool WorkerStore::iscompress_bp;
+bool WorkerStore::iscompensate_bp;
+int WorkerStore::bits_bp;
+int WorkerStore::bits;
+int WorkerStore::local_node_size;
+int WorkerStore::trend;
+vector<int> WorkerStore::emb_nodes;
+int WorkerStore::total_reqnum;
 
 // worker layer node feature
-map<int,map<int,map<int,vector<float>>>> WorkerStore::embs_from_remote;
+map<int, map<int, map<int, vector<float>>>> WorkerStore::embs_from_remote;
+
 void WorkerStore::set_nodes(const NodeMessage *nodeMessage) {
     // 将nodeMessage解析成nodes
     for (auto i:nodeMessage->nodes()) {
@@ -46,16 +72,16 @@ void WorkerStore::set_nodes(const NodeMessage *nodeMessage) {
     cout << "server:node number:" << nodes.size() << endl;
 }
 
-void WorkerStore::set_nodes_for_each_worker(const DataMessage *reply){
-    auto& nodes_tmp=reply->nodesforeachworker();
-    int workerNum=nodes_tmp.size();
-    for(int i=0;i<workerNum;i++){
-        auto& nodes_worker_i=nodes_tmp.Get(i);
-        int nodesNum=nodes_worker_i.nodes_size();
+void WorkerStore::set_nodes_for_each_worker(const DataMessage *reply) {
+    auto &nodes_tmp = reply->nodesforeachworker();
+    int workerNum = nodes_tmp.size();
+    for (int i = 0; i < workerNum; i++) {
+        auto &nodes_worker_i = nodes_tmp.Get(i);
+        int nodesNum = nodes_worker_i.nodes_size();
         vector<int> vec_tmp;
         WorkerStore::nodesForEachWorker.push_back(vec_tmp);
-        auto& nodesWorkerI_ws=WorkerStore::nodesForEachWorker[i];
-        for(int j=0;j<nodesNum;j++){
+        auto &nodesWorkerI_ws = WorkerStore::nodesForEachWorker[i];
+        for (int j = 0; j < nodesNum; j++) {
             nodesWorkerI_ws.push_back(nodes_worker_i.nodes(j));
         }
     }
