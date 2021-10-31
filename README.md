@@ -1,4 +1,9 @@
-# EC-Graph: A Distributed GNN System.
+# EC-Graph: A Distributed GNN System with Error-Compensted Compression.
+
+This is a system for distributed GNN training, which adopts a Graph-Centered based framework. There are three logical roles in this system, i.e., masters, workers and servers. Master reads the partition profiles and a input graph to assign sub-graphs to different training nodes (workers). The workers are responsible for the majority of computations (including forward propagation and backward propagation), while the servers manage the parameters (aggregating gradients and then updating the parameters). EC-Graph allows the communication among workers for exchanging the embeddings (FP) and the gradients of embeddings (BP). 
+
+![image](https://user-images.githubusercontent.com/20767715/139521729-c2b5a7ca-8a3a-47ab-9668-2ebb452837ca.png)
+
 
 The argument list:
 ```c++
@@ -52,7 +57,7 @@ If you just want to run EC-Graph on a single-machine, you can just "mkdir /mnt/d
 ```
 Two files will be created (all separators are "\t"). 
 
-featsClass.txt (id   feat (dim = 2)   class):
+featsClass.txt (id   feat (dim = 5)   class):
 0 1 0 1 1 1 0
 1 0 1 1 0 1 1
 2 0 0 0 1 1 0
