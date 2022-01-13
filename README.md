@@ -25,10 +25,10 @@ Note that, /mnt/data/cora is the shared nfs directory.
 Also, you can create the directory in the local to simulate the 
 distributed environment. 
 
-| Augument |  | Explanation | 
+| Augument | Explanation | 
 | :-----:| :-----: |
 | role_id | logical roles: "master", "server", "worker"; and its id: [int] | 
-| 单元格 | 单元格 | 
+
 
 ##**_How to Install EC-Graph_**
 
