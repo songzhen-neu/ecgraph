@@ -19,7 +19,8 @@ The argument list:
 --servers=127.0.0.1:2001,127.0.0.1:2002,127.0.0.1:2003
 --workers=127.0.0.1:3001,127.0.0.1:3002,127.0.0.1:3003
 --master=127.0.0.1:4001
---distgnnr=5
+--prune_layer=2
+--neigh_sam=5,5
 ```
 Note that, /mnt/data/cora is the shared nfs directory. 
 Also, you can create the directory in the local to simulate the 
@@ -28,7 +29,17 @@ distributed environment.
 | Augument | Explanation | 
 | :-----:| :-----: |
 | role_id | logical roles: "master", "server", "worker"; and its id: [int] | 
-
+|worker_server_num|number of workers and servers|
+|ifctx_mode|"ifctx=true" means using context.py as configurations, otherwise using the augument passing; |
+|data_path=/mnt/data/cora|file directory of dataset "cora", which should includes featClass.txt, edges.txt and nodesPartition.hash2.txt (hash partition for 2 workers)|
+|hidden|format: "16,16" means 3-layer GCN with each hidden size of 16|
+|vtx_edge_feat_class_train_val_test|numbers of vertices, edges, feature dimensions, classes, train vertices, validation vertices and test vertices|
+|if_cprs_trend_backcprs_backcpst_changeBit| the first four fields means if using compression, compensation for FP and BP; "changeBit" means if using the adaptive bit tuner |
+|bit_backbit_trend_printepoch| bit number for BP and FP; "trend" is the value of $T_{trend}$; "printepoch" means the printing interval of validation and test|
+|iter_lr_pttMethod|iteration rounds, learning rate, partitioning methods|
+|servers, workers, master| ips of servers, workers and master|
+|prune_layer| graph pruning, setting as N for N-layer GCN |
+|neigh_sam|the sampling number for each vertex|
 
 ##**_How to Install EC-Graph_**
 
