@@ -11,4 +11,6 @@
 build/
 testgit_track_rename
 __pycache__/
-cmake-3.20.2.tar.gz
+third_party/cmake-3.20.2.tar.gz
+third_party/c-ares/
+third_party/pybind11/

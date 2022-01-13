@@ -1,7 +1,7 @@
 import torch.nn.functional as F
 # from sympy.core import singleton
 
-import util_python.remote_access as ra
+import ecgraph.util_python.remote_access as ra
 
 import torch
 import numpy as np
@@ -63,9 +63,10 @@ class AutoGrad(object):
             self.Z[layer + 1] = x
             return x
 
-        x = F.normalize(x, p=2, dim=1)  # 是否每层都需要
+        # x = F.normalize(x, p=2, dim=1)  # 是否每层都需要
         self.Z[layer + 1] = x
-        x = self.Active(x, layer)
+        # x = self.Active(x, layer)
+        x=F.relu(x)
         self.H[layer + 1] = x
         return x
 
@@ -76,20 +77,20 @@ class AutoGrad(object):
         return x
 
     def de_activation(self, layer):
-        act = self.activation[layer]
-        if (act == F.relu):
-            self.sigma_z_grad[layer] = torch.tensor(np.where(self.Z[layer].data > 0, 1, 0))
-        elif (act == F.sigmoid):
+        # act = self.activation[layer]
+        # if (act == F.relu):
+        self.sigma_z_grad[layer] = torch.tensor(np.where(self.Z[layer].data > 0, 1, 0))
+        # elif (act == F.sigmoid):
             # sigmod' = x(1-x)
-            self.sigma_z_grad[layer] = self.Z[layer].data
-            self.sigma_z_grad[layer] = self.sigma_z_grad[layer] * (1 - self.sigma_z_grad[layer])
-            self.sigma_z_grad[layer] = torch.tensor(self.sigma_z_grad[layer])
-        elif (act == F.tanh):
+            # self.sigma_z_grad[layer] = self.Z[layer].data
+            # self.sigma_z_grad[layer] = self.sigma_z_grad[layer] * (1 - self.sigma_z_grad[layer])
+            # self.sigma_z_grad[layer] = torch.tensor(self.sigma_z_grad[layer])
+        # elif (act == F.tanh):
             # tanh' = 1 - x*x
-            self.sigma_z_grad[layer] = self.Z[layer].data
-            self.sigma_z_grad[layer] = 1 - self.sigma_z_grad[layer] * self.sigma_z_grad[layer]
-        elif (act == None):
-            return
+            # self.sigma_z_grad[layer] = self.Z[layer].data
+            # self.sigma_z_grad[layer] = 1 - self.sigma_z_grad[layer] * self.sigma_z_grad[layer]
+        # elif (act == None):
+        #     return
 
     def forward_detail(self, model, x, adj, nodes, epoch, graph):
         for i in range(0, self.layer_num):

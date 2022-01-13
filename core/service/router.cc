@@ -149,13 +149,14 @@ py::array_t<float> Router::getNeededEmb(vector<vector<int>> &nodes,
 }
 
 
-py::array_t<float> Router::getNeededEmb_train(int epoch, int layerId, bool isTrain, int feat_num) {
+py::array_t<float> Router::getNeededEmb_train(int epoch, int layerId, bool isTrain, int feat_num,int bitNum) {
 
     int workerNum = WorkerStore::worker_num;
     int localId = WorkerStore::worker_id;
     vector<EmbMessage> replyVec(workerNum);
     auto nodes = WorkerStore::request_nodes;
     int totalNodeNum = 0;
+    WorkerStore::bits=bitNum;
     if (isTrain) {
         totalNodeNum = WorkerStore::oldToNewMap.size() - WorkerStore::local_node_size;
 //        cout<<"totalNodeNum:"<<totalNodeNum<<endl;

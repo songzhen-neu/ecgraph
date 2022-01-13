@@ -12,9 +12,17 @@ def MmBackward(xf, wf, xl_g, flag):
         return xf.t().mm(xl_g)
 
 
-def NllLossBackward(xf, lab):
-    g_x = torch.zeros_like(xf).scatter(1, lab.reshape(lab.size()[0], 1), -1)
-    g_x = g_x / xf.size()[0]
+def NllLossBackward(xf, lab,idx_train):
+    # dim,index,src
+    # g_x = torch.zeros_like(xf).scatter(1, lab.reshape(lab.size()[0], 1), -1)
+    g_x=torch.zeros_like(xf)
+    for i in idx_train:
+        g_x[i][lab[i]]=-1
+
+
+
+    # g_x = g_x / xf.size()[0]
+    g_x = g_x / len(idx_train)
     return g_x
     # print(g_x)
     # print(lab)

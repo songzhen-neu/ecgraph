@@ -17,7 +17,7 @@
 #include <vector>
 #include "../store/WorkerStore.h"
 #include <pthread.h>
-#include "../../dgnn_server.h"
+#include "dgnn_server.h"
 #include "../../cmake/build/dgnn_test.grpc.pb.h"
 #include "../../cmake/build/dgnn_test.pb.h"
 #include <time.h>
@@ -117,10 +117,6 @@ public:
     void get_layerNum();
 
 
-    int add1() ;
-
-    int add(int a, int b);
-
     // vector<int>;map<int,vector<int>>; map<int,int>;map<int, set<int>>
     void sendDataToEachWorker(
             const vector<int> &nodes, const map<int, vector<float>> &features,
@@ -128,8 +124,6 @@ public:
 
     // client解析读取的data消息
     void pullDataFromServer();
-    void pullDataFromMaster( int worker_id,int worker_num,int data_num,
-                             string data_path,int feature_dim,int class_num);
 
     void pullDataFromMasterGeneral( int worker_id,int worker_num,int data_num,
                              const string& data_path,int feature_dim,int class_num,const string& partitionMethod,int edgeNum);
@@ -163,8 +157,8 @@ public:
 
     void worker_setEmbs(const map<int,vector<float>> &embMap);
 
-    void sendAndUpdateModels( int worker_id, int server_id,map<int,vector<vector<float>>> &weight_grads, map<int,vector<float>> &bia_grads,float lr);
-    void server_updateModels( int worker_id, int server_id,float lr,const string& key, py::array_t<float>& grad);
+//    void sendAndUpdateModels( int worker_id, int server_id,map<int,vector<vector<float>>> &weight_grads, map<int,vector<float>> &bia_grads,float lr);
+//    void server_updateModels( int worker_id, int server_id,float lr,const string& key, py::array_t<float>& grad);
 
 
     void testVariant();
@@ -208,7 +202,9 @@ public:
 
     py::array_t<float> server_PullParams(const string& param_id);
 
-    py::array_t<float> server_aggGrad(int worker_id, int server_id,float lr,const string& key, py::array_t<float>& grad);
+//    py::array_t<float> server_aggGrad(int worker_id, int server_id,float lr,const string& key, py::array_t<float>& grad);
+    void server_updateParam(int worker_id, int server_id,float lr,const string& key, py::array_t<float>& grad);
+
 
     void sendNode(int layid,py::array_t<int> list);
     py::array_t<int> pullNode(int layid);

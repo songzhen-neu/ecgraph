@@ -66,9 +66,9 @@ def encode_onehot(labels):
 
 # Yu
 def load_data(dgnnClient):
-    isRandomData = True
-    np.random.seed(3)
-    random.seed(3)
+    isRandomData = False
+    # np.random.seed(7)
+    # random.seed(7)
     # global ids encoded by master
     start=time.time()
     print("memory:{:.4f}G".format(psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024 / 1024))
@@ -79,9 +79,6 @@ def load_data(dgnnClient):
     end=time.time()
     print("time:{:.4f}".format(end-start))
     print("memory:{:.4f}G".format(psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024 / 1024))
-    # # add self-recurrent
-    # for id in adjs_from_server.keys():
-    #     adjs_from_server[id].add(id)
 
     worker_contains_nodes = dgnnClient.nodesForEachWorker
     nodes_in_worker = {}
@@ -203,21 +200,16 @@ def load_data(dgnnClient):
             # 'graph_train': graph_train}
 
 
+
 def load_data_sample(dgnnClient):
-    isRandomData = True
-    np.random.seed(2)
-    random.seed(2)
+    isRandomData = False
+    # np.random.seed(2)
+    # random.seed(2)
     # 这里读取的都是按照master统一编号的,
     nodes_from_server = dgnnClient.nodes
     feats_from_server = dgnnClient.features
     labels_from_server = dgnnClient.labels
     adjs_from_server = dgnnClient.adjs
-
-
-
-    # # add self-recurrent
-    # for id in adjs_from_server.keys():
-    #     adjs_from_server[id].add(id)
 
     worker_contains_nodes = dgnnClient.nodesForEachWorker
     nodes_in_worker = {}
@@ -251,13 +243,6 @@ def load_data_sample(dgnnClient):
 
     idx_train_old = [nodes_from_server[i] for i in idx_train]
 
-    # all_train_node_set = all_agg_node_num(nodes_from_server, idx_train, idx_val, idx_test, adjs_from_server)
-    # start_get_train=time.time()
-
-    # end_get_train=time.time()
-    # print('get train time:{:.4f}'.format(end_get_train-start_get_train))
-
-    # idx_train_for_test=idx_train
 
     # build the first-hop neighboring set (containing the local and remote neighbors)
     first_hop_set = set()
@@ -390,7 +375,7 @@ def load_data_sample(dgnnClient):
     # 将顶点按照id_old2new_map转化
     nodes_train = [id_old2new_map_train[i] for i in train_node_old_id]
 
-    idx_train=[id_old2new_map_train[i] for i in idx_train_old]
+    idx_train_full=[id_old2new_map_train[i] for i in idx_train_old]
 
     # 将邻接表按照id_old2new_map转化
     # 将标签按照id_old2new_map转换
@@ -418,12 +403,15 @@ def load_data_sample(dgnnClient):
     graph_train = Graph(train_node_old_id, feat_data_train, labels_train,
                         adjs_train, id_old2new_map_train, id_new2old_map_train, first_hop_set_for_workers_train)
 
+    idx_train=[id_old2new_map_train[i] for i in idx_train_old]
     idx_train = torch.LongTensor(idx_train)
+    idx_train_full=torch.LongTensor(idx_train_full)
     idx_val = torch.LongTensor(idx_val)
     idx_test = torch.LongTensor(idx_test)
 
     return {'idx_val': idx_val,
             'idx_train': idx_train,
+            'idx_train_full':idx_train_full,
             'idx_test': idx_test,
             'idx_train_for_test':idx_train,
             'train_ratio': train_ratio,

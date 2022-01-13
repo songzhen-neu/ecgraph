@@ -9,16 +9,15 @@
 #include <grpcpp/grpcpp.h>
 #include<grpcpp/health_check_service_interface.h>
 #include<grpcpp/ext/proto_server_reflection_plugin.h>
-#include "core/store/WorkerStore.h"
-#include "cmake/build/dgnn_test.grpc.pb.h"
-#include "cmake/build/dgnn_test.pb.h"
-#include "core/partition/RandomPartitioner.h"
-#include "core/partition/GeneralPartition.h"
-#include "core/util/threadUtil.h"
-#include "core/store/ServerStore.h"
+#include "../store/WorkerStore.h"
+#include "../../cmake/build/dgnn_test.grpc.pb.h"
+#include "../../cmake/build/dgnn_test.pb.h"
+#include "../partition/GeneralPartition.h"
+#include "../util/threadUtil.h"
+#include "../store/ServerStore.h"
 #include <cmath>
 #include <unistd.h>
-#include "core/compress/compress.h"
+//#include "../compress/compress.h"
 #include <math.h>
 #include <time.h>
 #include <google/protobuf/repeated_field.h>
@@ -58,17 +57,17 @@ using dgnn_test::GradMessage;
 
 class ServiceImpl final:public DgnnProtoService::Service{
 public:
-    Status add1(ServerContext* context,const intM* request,
-                intM* reply) override;
+//    Status add1(ServerContext* context,const intM* request,
+//                intM* reply) override;
     Status sendDataToEachWorker(
             ServerContext* context,const DataMessage* request,
             BoolMessage* reply) override;
     Status pullDataFromServer(
             ServerContext* context,const intM* request,
             DataMessage* reply) override;
-    Status pullDataFromMaster(
-            ServerContext* context,const ContextMessage* request,
-            DataMessage* reply) override;
+//    Status pullDataFromMaster(
+//            ServerContext* context,const ContextMessage* request,
+//            DataMessage* reply) override;
     Status pullDataFromMasterGeneral(
             ServerContext* context,const ContextMessage* request,
             DataMessage* reply) override;
@@ -98,9 +97,9 @@ public:
     Status workerPullGCompress(ServerContext* context,const EmbMessage* request,
                                EmbMessage* reply) override;
 
-    Status Server_SendAndUpdateModels(
-            ServerContext* context,const GradientMessage* request,
-            BoolMessage* reply) override;
+//    Status Server_SendAndUpdateModels(
+//            ServerContext* context,const GradientMessage* request,
+//            BoolMessage* reply) override;
 
     Status TestVariant(
             ServerContext* context,const TestVMessage* request,
@@ -131,7 +130,7 @@ public:
     //    static void* RunServer(void* address_tmp);
     static void RunServerByPy(const string& address,int serverId);
 
-    Status server_updateModels(ServerContext *context, const GradMessage* request, BoolMessage *reply) override;
+//    Status server_updateModels(ServerContext *context, const GradMessage* request, BoolMessage *reply) override;
 
     //Yu
     Status workerSendTrainNode(ServerContext *context, const NodeMessage *request, BoolMessage *reply) override;
@@ -144,10 +143,13 @@ public:
     Status serverSendTestNode(ServerContext *context, const ContextMessage *request, NodeMessage *reply) override;
 
     Status server_PullParams(ServerContext *context, const StringM *request, Param *reply) override;
-    Status server_aggGrad(ServerContext *context,const GradMessage *request, GradMessage *reply) override;
+//    Status server_aggGrad(ServerContext *context,const GradMessage *request, GradMessage *reply) override;
+    Status server_updateParam(ServerContext *context,const GradMessage *request, BoolMessage *reply) override;
 
     Status workerSendNode(ServerContext *context, const NodeMessage *request, BoolMessage *reply) override;
     Status serverSendNode(ServerContext *context, const NodeMessage *request, NodeMessage *reply) override;
+
+
 
 };
 

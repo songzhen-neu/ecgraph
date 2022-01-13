@@ -4,15 +4,15 @@
 # featDim=5
 # classNum=2
 
-import context.context as context
+from ecgraph.context import context as context
 import time
 
-fileName=context.glContext.config['data_path']
-nodeNum=context.glContext.config['data_num']
-featDim=context.glContext.config['feature_dim']
-classNum=context.glContext.config['class_num']
+fileName= context.glContext.config['data_path']
+nodeNum= context.glContext.config['data_num']
+featDim= context.glContext.config['feature_dim']
+classNum= context.glContext.config['class_num']
 
-workerNum=context.glContext.config['worker_num']
+workerNum= context.glContext.config['worker_num']
 
 fileWriteName=fileName+'/nodesPartition'+'.hash'+str(workerNum)+'.txt'
 start=time.time()

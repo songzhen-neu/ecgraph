@@ -114,13 +114,10 @@ int GeneralPartition::startPartition(int worker_num, string partitionMethod, int
         // 开始构造邻接表
         adj_map[vertex_id].insert(neibor_id);
         adj_map[neibor_id].insert(vertex_id);
-
-
         count_flag++;
         if (count_flag % (10000) == 0) {
             cout << "正在处理第" << count_flag << "个数据" << endl;
         }
-
     }
     int edge_num = count_flag;
     adjInFile.close();

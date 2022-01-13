@@ -560,28 +560,6 @@ void DGNNClient::set_layerNum(int layerNum) {
 
 void DGNNClient::get_layerNum() {}
 
-int DGNNClient::add1() {
-    intM request;
-    request.set_value(105);
-    intM reply;
-    ClientContext context;
-
-    Status status = stub_->add1(&context, request, &reply);
-
-    if (status.ok()) {
-//            cout<<reply.value()<<endl;
-        return reply.value();
-    } else {
-        std::cout << status.error_code() << ": " << status.error_message()
-                  << std::endl;
-        return -1;
-    }
-}
-
-int DGNNClient::add(int a, int b) {
-    return a + b;
-}
-
 // vector<int>;map<int,vector<int>>; map<int,int>;map<int, set<int>>
 void DGNNClient::sendDataToEachWorker(
         const vector<int> &nodes, const map<int, vector<float>> &features,
@@ -664,53 +642,53 @@ map<int, vector<float>> DGNNClient::get_embs() {
 }
 
 
-void DGNNClient::sendAndUpdateModels(int worker_id, int server_id, map<int, vector<vector<float>>> &weights,
-                                     map<int, vector<float>> &bias, float lr) {
-    // 发送收到的梯度到参数服务器中
-    ClientContext context;
-    GradientMessage request;
-    BoolMessage reply;
-
-    request.set_worker_id(worker_id);
-    request.set_lr(lr);
-    // 按层构建
-    int layerNum = weights.size();
-    for (int i = 0; i < layerNum; i++) {
-        WeightsAndBiasMessage *weightsAndBiasMessage = request.add_grads();
-        // 构建第i层weights
-        for (const auto &row:weights[i]) {
-            TensorMessage *tensor = weightsAndBiasMessage->add_weights();
-            for (auto dim:row) {
-                tensor->add_tensor(dim);
-            }
-        }
-//        cout<<"send layer "<<i<<" to server"<<server_id<<" weight size:"<<request.grads(i).weights_size() <<"*"
-//            <<request.grads(i).weights().begin()->tensor_size()<<endl;
-        // 构建第i层bias
-        if (server_id == 0) {
-            TensorMessage *tensor = weightsAndBiasMessage->bias().New();
-            for (const auto &bia:bias[i]) {
-                tensor->add_tensor(bia);
-            }
-            weightsAndBiasMessage->set_allocated_bias(tensor);
-//            cout<<"send layer "<<i<<" to server"<<server_id<<" bias size:"<<request.grads(i).bias().tensor_size()<<endl;
-        }
-
-
-    }
-
-    Status status = stub_->Server_SendAndUpdateModels(&context, request, &reply);
-    if (status.ok()) {
-//        cout << "okokokokok" << endl;
-    } else {
-        cout << "update parameters false" << endl;
-        cout << "error detail:" << status.error_details() << endl;
-        cout << "error message:" << status.error_message() << endl;
-        cout << "error code:" << status.error_code() << endl;
-    }
-
-
-}
+//void DGNNClient::sendAndUpdateModels(int worker_id, int server_id, map<int, vector<vector<float>>> &weights,
+//                                     map<int, vector<float>> &bias, float lr) {
+//    // 发送收到的梯度到参数服务器中
+//    ClientContext context;
+//    GradientMessage request;
+//    BoolMessage reply;
+//
+//    request.set_worker_id(worker_id);
+//    request.set_lr(lr);
+//    // 按层构建
+//    int layerNum = weights.size();
+//    for (int i = 0; i < layerNum; i++) {
+//        WeightsAndBiasMessage *weightsAndBiasMessage = request.add_grads();
+//        // 构建第i层weights
+//        for (const auto &row:weights[i]) {
+//            TensorMessage *tensor = weightsAndBiasMessage->add_weights();
+//            for (auto dim:row) {
+//                tensor->add_tensor(dim);
+//            }
+//        }
+////        cout<<"send layer "<<i<<" to server"<<server_id<<" weight size:"<<request.grads(i).weights_size() <<"*"
+////            <<request.grads(i).weights().begin()->tensor_size()<<endl;
+//        // 构建第i层bias
+//        if (server_id == 0) {
+//            TensorMessage *tensor = weightsAndBiasMessage->bias().New();
+//            for (const auto &bia:bias[i]) {
+//                tensor->add_tensor(bia);
+//            }
+//            weightsAndBiasMessage->set_allocated_bias(tensor);
+////            cout<<"send layer "<<i<<" to server"<<server_id<<" bias size:"<<request.grads(i).bias().tensor_size()<<endl;
+//        }
+//
+//
+//    }
+//
+//    Status status = stub_->Server_SendAndUpdateModels(&context, request, &reply);
+//    if (status.ok()) {
+////        cout << "okokokokok" << endl;
+//    } else {
+//        cout << "update parameters false" << endl;
+//        cout << "error detail:" << status.error_details() << endl;
+//        cout << "error message:" << status.error_message() << endl;
+//        cout << "error code:" << status.error_code() << endl;
+//    }
+//
+//
+//}
 
 
 // client解析读取的data消息
@@ -744,37 +722,37 @@ void DGNNClient::pullDataFromServer() {
 }
 
 // request master
-void DGNNClient::pullDataFromMaster(
-        int worker_id, int worker_num, int data_num,
-        string data_path, int feature_dim, int class_num) {
-    ContextMessage m;
-    ClientContext context;
-    DataMessage response;
-    m.set_workerid(worker_id);
-    m.set_workernum(worker_num);
-    PartitionMessage *partitionMessage = m.partition().New();
-    partitionMessage->set_workernum(worker_num);
-    partitionMessage->set_datanum(data_num);
-    partitionMessage->set_datapath(data_path);
-    partitionMessage->set_classnum(class_num);
-    partitionMessage->set_featuredim(feature_dim);
-    m.set_allocated_partition(partitionMessage);
-
-    Status status = stub_->pullDataFromMaster(&context, m, &response);
-    if (status.ok()) {
-        cout << "pullDataFromMaster completed" << endl;
-    } else {
-        std::cout << status.error_code() << ": " << status.error_message()
-                  << std::endl;
-    }
-    // 将获取到的数据set到自己本地的store中
-    cout << "***************local worker store****************" << endl;
-    WorkerStore::set_adjs(&response.adjlist());
-    WorkerStore::set_labels(&response.labellist());
-    WorkerStore::set_features(&response.featurelist());
-    WorkerStore::set_nodes(&response.nodelist());
-
-}
+//void DGNNClient::pullDataFromMaster(
+//        int worker_id, int worker_num, int data_num,
+//        string data_path, int feature_dim, int class_num) {
+//    ContextMessage m;
+//    ClientContext context;
+//    DataMessage response;
+//    m.set_workerid(worker_id);
+//    m.set_workernum(worker_num);
+//    PartitionMessage *partitionMessage = m.partition().New();
+//    partitionMessage->set_workernum(worker_num);
+//    partitionMessage->set_datanum(data_num);
+//    partitionMessage->set_datapath(data_path);
+//    partitionMessage->set_classnum(class_num);
+//    partitionMessage->set_featuredim(feature_dim);
+//    m.set_allocated_partition(partitionMessage);
+//
+//    Status status = stub_->pullDataFromMaster(&context, m, &response);
+//    if (status.ok()) {
+//        cout << "pullDataFromMaster completed" << endl;
+//    } else {
+//        std::cout << status.error_code() << ": " << status.error_message()
+//                  << std::endl;
+//    }
+//    // 将获取到的数据set到自己本地的store中
+//    cout << "***************local worker store****************" << endl;
+//    WorkerStore::set_adjs(&response.adjlist());
+//    WorkerStore::set_labels(&response.labellist());
+//    WorkerStore::set_features(&response.featurelist());
+//    WorkerStore::set_nodes(&response.nodelist());
+//
+//}
 
 void DGNNClient::freeMaster() {
     BoolMessage req;
@@ -1111,7 +1089,7 @@ py::array_t<float> DGNNClient::worker_pull_emb_compress(
     }
 //    end=clock();
 //    cout<<"bucket process time22222222222:"<<(double)(end-start)/CLOCKS_PER_SEC<<"s"<<endl;
-//    delete &request;
+//    delete &request;worker_pull_needed_emb
 //    delete &reply;
 
     return result;
@@ -2728,8 +2706,95 @@ py::array_t<float> DGNNClient::server_PullParams(const string &param_id) {
 }
 
 
+//void
+//DGNNClient::server_updateModels(int worker_id, int server_id, float lr, const string &key, py::array_t<float> &grad) {
+//    // 发送收到的梯度到参数服务器中
+//    ClientContext context;
+//    GradMessage request;
+//    BoolMessage reply;
+//
+//    request.set_wid(worker_id);
+//    request.set_sid(server_id);
+//    request.set_lr(lr);
+//    Param *grad_message = request.grad().New();
+//
+//    grad_message->set_id(key);
+//
+//    py::buffer_info grad_buf = grad.request();
+////    if (grad_buf.ndim != 1) {
+////        throw std::runtime_error("numpy.ndarray dims must be 1!");
+////    }
+//    auto *ptr1 = (float *) grad_buf.ptr;
+//
+//    grad_message->mutable_elems()->Reserve(grad.size());
+//    for (int i = 0; i < grad.size(); i++) {
+//        grad_message->mutable_elems()->Add(ptr1[i]);
+//    }
+//    request.set_allocated_grad(grad_message);
+//
+//    Status status = stub_->server_updateModels(&context, request, &reply);
+//    if (status.ok()) {
+////        cout << "okokokokok" << endl;
+//    } else {
+//        cout << "update parameters false" << endl;
+//        cout << "error detail:" << status.error_details() << endl;
+//        cout << "error message:" << status.error_message() << endl;
+//        cout << "error code:" << status.error_code() << endl;
+//    }
+//}
+
+
+//py::array_t<float>
+//DGNNClient::server_aggGrad(int worker_id, int server_id, float lr, const string &key, py::array_t<float> &grad) {
+//    // 发送收到的梯度到参数服务器中
+//    ClientContext context;
+//    GradMessage request;
+//    GradMessage reply;
+//
+//    request.set_wid(worker_id);
+//    request.set_sid(server_id);
+//    request.set_lr(lr);
+//    Param *grad_message = request.grad().New();
+//
+//    grad_message->set_id(key);
+//
+//    py::buffer_info grad_buf = grad.request();
+////    if (grad_buf.ndim != 1) {
+////        throw std::runtime_error("numpy.ndarray dims must be 1!");
+////    }
+//    auto *ptr1 = (float *) grad_buf.ptr;
+//
+//
+////    grad_message->mutable_elems()->Reserve(grad.size());
+////    for(int i=0;i<grad.size();i++){
+////        grad_message->mutable_elems()->Add(ptr1[i]);
+////    }
+//    grad_message->mutable_elems()->Add(ptr1, ptr1 + grad.size());
+//    request.set_allocated_grad(grad_message);
+//
+//    Status status = stub_->server_aggGrad(&context, request, &reply);
+//    auto size = reply.grad().elems_size();
+//    auto result = py::array_t<float>(size);
+//
+//    if (status.ok()) {
+//        py::buffer_info buf_result = result.request();
+//        auto *ptr_result = (float *) buf_result.ptr;
+//        for (int i = 0; i < size; i++) {
+//            ptr_result[i] = reply.grad().elems(i);
+//        }
+//    } else {
+//        cout << "update parameters false" << endl;
+//        cout << "error detail:" << status.error_details() << endl;
+//        cout << "error message:" << status.error_message() << endl;
+//        cout << "error code:" << status.error_code() << endl;
+//    }
+//
+//    return result;
+//}
+
+
 void
-DGNNClient::server_updateModels(int worker_id, int server_id, float lr, const string &key, py::array_t<float> &grad) {
+DGNNClient::server_updateParam(int worker_id, int server_id, float lr, const string &key, py::array_t<float> &grad)  {
     // 发送收到的梯度到参数服务器中
     ClientContext context;
     GradMessage request;
@@ -2743,67 +2808,16 @@ DGNNClient::server_updateModels(int worker_id, int server_id, float lr, const st
     grad_message->set_id(key);
 
     py::buffer_info grad_buf = grad.request();
-//    if (grad_buf.ndim != 1) {
-//        throw std::runtime_error("numpy.ndarray dims must be 1!");
-//    }
     auto *ptr1 = (float *) grad_buf.ptr;
 
-    grad_message->mutable_elems()->Reserve(grad.size());
-    for (int i = 0; i < grad.size(); i++) {
-        grad_message->mutable_elems()->Add(ptr1[i]);
-    }
-    request.set_allocated_grad(grad_message);
-
-    Status status = stub_->server_updateModels(&context, request, &reply);
-    if (status.ok()) {
-//        cout << "okokokokok" << endl;
-    } else {
-        cout << "update parameters false" << endl;
-        cout << "error detail:" << status.error_details() << endl;
-        cout << "error message:" << status.error_message() << endl;
-        cout << "error code:" << status.error_code() << endl;
-    }
-}
-
-
-py::array_t<float>
-DGNNClient::server_aggGrad(int worker_id, int server_id, float lr, const string &key, py::array_t<float> &grad) {
-    // 发送收到的梯度到参数服务器中
-    ClientContext context;
-    GradMessage request;
-    GradMessage reply;
-
-    request.set_wid(worker_id);
-    request.set_sid(server_id);
-    request.set_lr(lr);
-    Param *grad_message = request.grad().New();
-
-    grad_message->set_id(key);
-
-    py::buffer_info grad_buf = grad.request();
-//    if (grad_buf.ndim != 1) {
-//        throw std::runtime_error("numpy.ndarray dims must be 1!");
-//    }
-    auto *ptr1 = (float *) grad_buf.ptr;
-
-
-//    grad_message->mutable_elems()->Reserve(grad.size());
-//    for(int i=0;i<grad.size();i++){
-//        grad_message->mutable_elems()->Add(ptr1[i]);
-//    }
     grad_message->mutable_elems()->Add(ptr1, ptr1 + grad.size());
     request.set_allocated_grad(grad_message);
 
-    Status status = stub_->server_aggGrad(&context, request, &reply);
-    auto size = reply.grad().elems_size();
-    auto result = py::array_t<float>(size);
+    Status status = stub_->server_updateParam(&context, request, &reply);
+
 
     if (status.ok()) {
-        py::buffer_info buf_result = result.request();
-        auto *ptr_result = (float *) buf_result.ptr;
-        for (int i = 0; i < size; i++) {
-            ptr_result[i] = reply.grad().elems(i);
-        }
+
     } else {
         cout << "update parameters false" << endl;
         cout << "error detail:" << status.error_details() << endl;
@@ -2811,5 +2825,4 @@ DGNNClient::server_aggGrad(int worker_id, int server_id, float lr, const string 
         cout << "error code:" << status.error_code() << endl;
     }
 
-    return result;
 }

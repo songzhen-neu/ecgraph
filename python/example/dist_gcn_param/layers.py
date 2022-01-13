@@ -2,12 +2,8 @@ import torch
 
 import torch.nn as nn
 
-from context import context
+from ecgraph.context import context
 import numpy as np
-# import autograd.autograd as atg
-import context.momentum as mom
-import context.store as store
-# from cmake.build.pb11_ec import *
 from cmake.build.lib.pb11_ec import *
 
 import time
@@ -61,9 +57,10 @@ class GraphConvolution(nn.Module):
     '''
 
     def forward(self, input, adj, nodes, epoch, autograd, graph):
-        # 权重需要从参数服务器中获取,先不做参数划分了，只弄一个server
-        # 从参数服务器获取第0层的参数
         context.glContext.dgnnServerRouter[0].server_Barrier(self.layer_id)
+        if autograd.weight[self.layer_id] is not None:
+            self.weight.data=autograd.weight[self.layer_id]
+            self.bias.data=autograd.bias[self.layer_id]
 
         # 将support设置到dgnnClient里,需要转成原index,slow
         emb_temp = input.detach().numpy()
@@ -71,14 +68,16 @@ class GraphConvolution(nn.Module):
 
         start = time.time()
 
-        if store.isTrain and epoch==0:
+        if context.isTrain and epoch==0:
             context.glContext.dgnnClient.setCtxForCpp(
-                graph.fsthop_for_worker,context.glContext.config['id'],graph.id_old2new_dict, context.glContext.config['worker_num'],
-                context.glContext.config['ifCompress'], context.glContext.config['isChangeRate'], int(context.glContext.config['bitNum']),
-                len(nodes),context.glContext.config['trend'],emb_nodes,context.glContext.config['layerNum'],
-                context.glContext.config['ifBackPropCompress'],context.glContext.config['ifBackPropCompensate'],context.glContext.config['bitNum_backProp'])
+                graph.fsthop_for_worker, context.glContext.config['id'],graph.id_old2new_dict, context.glContext.config['worker_num'],
+                context.glContext.config['ifCompress'], context.glContext.config['isChangeRate'], int(
+                    context.glContext.config['bitNum']),
+                len(nodes), context.glContext.config['trend'],emb_nodes, context.glContext.config['layerNum'],
+                context.glContext.config['ifBackPropCompress'], context.glContext.config['ifBackPropCompensate'],
+                context.glContext.config['bitNum_backProp'])
 
-        if store.isTrain:
+        if context.isTrain:
             if epoch == 0 and self.layer_id == 0:
                 # set_embs(emb_nodes, emb_temp, emb_temp.max(), emb_temp.min(),epoch)
                 set_embs_ptr( emb_temp, emb_temp.max(), emb_temp.min(), epoch)
@@ -92,7 +91,7 @@ class GraphConvolution(nn.Module):
 
         end = time.time()
 
-        if store.isTrain:
+        if context.isTrain:
             context.glContext.time_epoch['set_embs'] += (end - start)
         # print("set_embs time {0}:".format( end - start))
         # 变换后，需要从远端获取嵌入;也就是获取一阶邻居的嵌入；
@@ -106,11 +105,12 @@ class GraphConvolution(nn.Module):
         feat_size = len(emb_temp[0])
         needed_embs = None
 
-        if store.isTrain:
+        if context.isTrain:
             if epoch != 0 and self.layer_id == 0:
                 needed_embs = context.glContext.firstHopFeature
             else:
-                needed_embs = context.glContext.dgnnClientRouterForCpp.getNeededEmb_train(epoch, self.layer_id, store.isTrain, feat_size)
+                needed_embs = context.glContext.dgnnClientRouterForCpp.getNeededEmb_train(epoch, self.layer_id,
+                                        context.isTrain, feat_size, int(context.glContext.config['bitNum']))
                 if self.layer_id == 0 and epoch == 0:
                     context.glContext.firstHopFeature = needed_embs
 
@@ -120,11 +120,11 @@ class GraphConvolution(nn.Module):
                 , epoch, self.layer_id, context.glContext.config['id'],
                 graph.id_old2new_dict, context.glContext.config['worker_num'], len(nodes),
                 context.glContext.config['ifCompress'], context.glContext.config['layerNum'],
-                int(context.glContext.config['bitNum']), context.glContext.config['isChangeRate'], store.isTrain,
+                int(context.glContext.config['bitNum']), context.glContext.config['isChangeRate'], context.isTrain,
                 context.glContext.config['trend'], feat_size, context.glContext.config['changeRateMode'])
 
         end = time.time()
-        if store.isTrain:
+        if context.isTrain:
             context.glContext.time_epoch['get_embs'] += (end - start)
         # print("get need embs time:"+str(end-start))
 
@@ -176,9 +176,6 @@ class GraphConvolution(nn.Module):
             return output + self.bias
         else:
             return output
-
-    # 通过设置断点，可以看出output的形式是0.01，0.01，0.01，0.01，0.01，#0.01，0.94]，
-    # 里面的值代表该x对应标签不同的概率，故此值可转换为#[0,0,0,0,0,0,1]，对应我们之前把标签onehot后的第七种标签
 
     def __repr__(self):
         return self.__class__.__name__ + ' (' \

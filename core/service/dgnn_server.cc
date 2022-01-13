@@ -15,101 +15,101 @@ struct Bucket {
     float value;
 };
 
-Status ServiceImpl::add1(ServerContext *context, const intM *request,
-                         intM *reply) {
-    reply->set_value(request->value() + 1);
-    cout << "vvvvvvvvvvvvvv" << endl;
+//Status ServiceImpl::add1(ServerContext *context, const intM *request,
+//                         intM *reply) {
+//    reply->set_value(request->value() + 1);
+//    cout << "vvvvvvvvvvvvvv" << endl;
+//
+//    return Status::OK;
+//}
 
-    return Status::OK;
-}
+//RandomPartitioner randomPartitioner;
 
-RandomPartitioner randomPartitioner;
-
-Status ServiceImpl::pullDataFromMaster(
-        ServerContext *context, const ContextMessage *request,
-        DataMessage *reply) {
-
-    cout << "worker " << request->workerid() << " has arrived!" << endl;
-    int workerid = request->workerid();
-    // 除了worker 0以外，其他所有线程都进行等待，worker 0进行分区，分区完成后notify其他进程
-    if (request->workerid() == 0) {
-        unique_lock<mutex> lck(ThreadUtil::mtx);
-        // 开始进行分区
-        int workerNum = request->workernum();
-        Check::check_partition_pass(
-                request->workernum(),
-                request->partition().datanum(),
-                request->partition().datapath(),
-                request->partition().featuredim(),
-                request->partition().classnum());
-        //int data_num, int worker_num, string filename, int feature_size, int label_size;
-
-        randomPartitioner.init(
-                request->partition().datanum(),
-                request->workernum(),
-                request->partition().datapath(),
-                request->partition().featuredim(),
-                request->partition().classnum());
-
-        randomPartitioner.startPartition(workerNum, request->partition().partitionmethod(),
-                                         request->partition().datanum(), request->partition().edgenum());
-        ThreadUtil::ready = true;
-        ThreadUtil::cv.notify_all();
-
-
-    } else {
-        unique_lock<mutex> lck(ThreadUtil::mtx);
-        // 进入等待
-        while (!ThreadUtil::ready) {
-            ThreadUtil::cv.wait(lck);
-        }
-    }
-
-
-    // 开始返回每个worker的数据
-    // 构建nodes
-    NodeMessage *nodeMessage = reply->nodelist().New();
-    for (int id:randomPartitioner.nodes[workerid]) {
-        nodeMessage->add_nodes(id);
-    }
-    reply->set_allocated_nodelist(nodeMessage);
-
-    // 构建feature
-    DataMessage_FeatureMessage *featureMessage = reply->featurelist().New();
-    for (auto &id_feature : randomPartitioner.features[workerid]) {
-        DataMessage_FeatureMessage_FeatureItem *item = featureMessage->add_features();
-        item->set_vid(id_feature.first);
-        for (float feat_dim:id_feature.second) {
-            item->add_feature(feat_dim);
-        }
-    }
-    reply->set_allocated_featurelist(featureMessage);
-
-    // 构建label
-    DataMessage_LabelMessage *labelMessage = reply->labellist().New();
-    for (auto &id_label:randomPartitioner.labels[workerid]) {
-        DataMessage_LabelMessage_LabelItem *item = labelMessage->add_labels();
-        item->set_vid(id_label.first);
-        item->set_label(id_label.second);
-    }
-    reply->set_allocated_labellist(labelMessage);
-
-    // 构建adjs
-    DataMessage_AdjMessage *adjMessage = reply->adjlist().New();
-    for (const auto &id_neibors:randomPartitioner.adjs[workerid]) {
-        DataMessage_AdjMessage_AdjItem *adjItem = adjMessage->add_adjs();
-        adjItem->set_vid(id_neibors.first);
-        for (auto neibor:id_neibors.second) {
-            adjItem->add_neibors(neibor);
-        }
-    }
-    reply->set_allocated_adjlist(adjMessage);
-
-
-    return Status::OK;
-
-//     vector<int>;map<int,vector<int>>; map<int,int>;map<int, set<int>>
-}
+//Status ServiceImpl::pullDataFromMaster(
+//        ServerContext *context, const ContextMessage *request,
+//        DataMessage *reply) {
+//
+//    cout << "worker " << request->workerid() << " has arrived!" << endl;
+//    int workerid = request->workerid();
+//    // 除了worker 0以外，其他所有线程都进行等待，worker 0进行分区，分区完成后notify其他进程
+//    if (request->workerid() == 0) {
+//        unique_lock<mutex> lck(ThreadUtil::mtx);
+//        // 开始进行分区
+//        int workerNum = request->workernum();
+//        Check::check_partition_pass(
+//                request->workernum(),
+//                request->partition().datanum(),
+//                request->partition().datapath(),
+//                request->partition().featuredim(),
+//                request->partition().classnum());
+//        //int data_num, int worker_num, string filename, int feature_size, int label_size;
+//
+//        randomPartitioner.init(
+//                request->partition().datanum(),
+//                request->workernum(),
+//                request->partition().datapath(),
+//                request->partition().featuredim(),
+//                request->partition().classnum());
+//
+//        randomPartitioner.startPartition(workerNum, request->partition().partitionmethod(),
+//                                         request->partition().datanum(), request->partition().edgenum());
+//        ThreadUtil::ready = true;
+//        ThreadUtil::cv.notify_all();
+//
+//
+//    } else {
+//        unique_lock<mutex> lck(ThreadUtil::mtx);
+//        // 进入等待
+//        while (!ThreadUtil::ready) {
+//            ThreadUtil::cv.wait(lck);
+//        }
+//    }
+//
+//
+//    // 开始返回每个worker的数据
+//    // 构建nodes
+//    NodeMessage *nodeMessage = reply->nodelist().New();
+//    for (int id:randomPartitioner.nodes[workerid]) {
+//        nodeMessage->add_nodes(id);
+//    }
+//    reply->set_allocated_nodelist(nodeMessage);
+//
+//    // 构建feature
+//    DataMessage_FeatureMessage *featureMessage = reply->featurelist().New();
+//    for (auto &id_feature : randomPartitioner.features[workerid]) {
+//        DataMessage_FeatureMessage_FeatureItem *item = featureMessage->add_features();
+//        item->set_vid(id_feature.first);
+//        for (float feat_dim:id_feature.second) {
+//            item->add_feature(feat_dim);
+//        }
+//    }
+//    reply->set_allocated_featurelist(featureMessage);
+//
+//    // 构建label
+//    DataMessage_LabelMessage *labelMessage = reply->labellist().New();
+//    for (auto &id_label:randomPartitioner.labels[workerid]) {
+//        DataMessage_LabelMessage_LabelItem *item = labelMessage->add_labels();
+//        item->set_vid(id_label.first);
+//        item->set_label(id_label.second);
+//    }
+//    reply->set_allocated_labellist(labelMessage);
+//
+//    // 构建adjs
+//    DataMessage_AdjMessage *adjMessage = reply->adjlist().New();
+//    for (const auto &id_neibors:randomPartitioner.adjs[workerid]) {
+//        DataMessage_AdjMessage_AdjItem *adjItem = adjMessage->add_adjs();
+//        adjItem->set_vid(id_neibors.first);
+//        for (auto neibor:id_neibors.second) {
+//            adjItem->add_neibors(neibor);
+//        }
+//    }
+//    reply->set_allocated_adjlist(adjMessage);
+//
+//
+//    return Status::OK;
+//
+////     vector<int>;map<int,vector<int>>; map<int,int>;map<int, set<int>>
+//}
 
 GeneralPartition generalPartition;
 
@@ -2876,263 +2876,263 @@ Status ServiceImpl::pullDataFromServer(
 
 }
 
-Status ServiceImpl::Server_SendAndUpdateModels(
-        ServerContext *context, const GradientMessage *request,
-        BoolMessage *reply) {
-    // 所有worker等待master清空完梯度聚合后，继续执行
-    if (request->worker_id() == 0) {
-        unique_lock<mutex> lck(ThreadUtil::mtx_updateModels);
-        if (ServerStore::serverId == 0) {
-            ServerStore::bias_grad_agg.clear();
-            cout << "*********bias_grad_agg_is_cleared**********" << endl;
-            cout << ServerStore::bias_grad_agg.size() << endl;
-        }
-        ServerStore::weights_grad_agg.clear();
-        cout << "*********weights_grad_agg_is_cleared**********" << endl;
-        cout << ServerStore::weights_grad_agg.size() << endl;
-        ThreadUtil::ready_updateModels = true;
-        ThreadUtil::cv_updateModels.notify_all();
-    } else {
-        unique_lock<mutex> lck(ThreadUtil::mtx_updateModels);
-        while (!ThreadUtil::ready_updateModels) {
-            ThreadUtil::cv_updateModels.wait(lck);
-        }
-    }
-    float alpha = request->lr();
-    // 多个worker一起更新参数，先聚合所有worker的梯度
-    // 聚合worker的梯度时，先上锁
-//    pthread_mutex_lock(&ThreadUtil::mtx_updateModels_addGrad);
-    unique_lock<mutex> lck(ThreadUtil::mtx_updateModels);
-
-    int layerNum = request->grads_size();
-    cout << "**********layer number*********: " << layerNum << endl;
-
-    // 判断是否已经被初始化了，如果未被初始化，那么直接用这台机器的梯度初始化ServerStore中的grad
-    if (ServerStore::weights_grad_agg.count(0) == 0) {
-        // 对于每一层的梯度聚合
-        cout << request->worker_id() << "**************first add start********************" << endl;
-
-        for (int i = 0; i < layerNum; i++) {
-            const auto &grad = request->grads(i);
-            int weight_size = grad.weights_size();
-            int tensor_size = grad.weights().begin()->tensor_size();
-
-
-            vector<vector<float>> weight_grad(weight_size);
-            // 这里获取的是每一个WeightAndBiasMessage
-            //先遍历Weight,这一层是遍历每一个TensorMessage
-
-            for (int j = 0; j < weight_size; j++) {
-                const auto tensor = grad.weights(j);
-
-                vector<float> grad_row(tensor_size);
-                for (int k = 0; k < tensor_size; k++) {
-                    float dim = tensor.tensor(k);
-                    grad_row[k] = (dim / (float) ServerStore::worker_num);
-                }
-                weight_grad[j] = grad_row;
-            }
-            ServerStore::weights_grad_agg.insert(pair<int, vector<vector<float>>>(i, weight_grad));
-
-            // 插入第i层的bias
-            if (ServerStore::serverId == 0) {
-                int tensorSize = grad.bias().tensor_size();
-                vector<float> bia_grad(tensorSize);
-                for (int j = 0; j < tensorSize; j++) {
-                    float dim = grad.bias().tensor(j);
-                    bia_grad[j] = (dim / (float) ServerStore::worker_num);
-                }
-                ServerStore::bias_grad_agg.insert(pair<int, vector<float>>(i, bia_grad));
-            }
-
-        }
-        cout << request->worker_id() << "**************first add end********************" << endl;
-    } else {
-        // 已经有初始化的值了，因此需要做累加
-        // 对于每一层的梯度聚合
-        cout << request->worker_id() << "**************second add start********************" << endl;
-
-        for (int i = 0; i < layerNum; i++) {
-            const auto &grad = request->grads(i);
-            auto &weights_grad_agg_layer = ServerStore::weights_grad_agg[i];
-            // 这里获取的是每一个WeightAndBiasMessage
-            //先遍历Weight,这一层是遍历每一个TensorMessage
-            int weight_size = grad.weights_size();
-            int tensor_size = grad.weights().begin()->tensor_size();
-            for (int j = 0; j < weight_size; j++) {
-                const auto &tensor = grad.weights(j);
-                auto &weights_grad_agg_row = weights_grad_agg_layer[j];
-                for (int k = 0; k < tensor_size; k++) {
-                    float dim = tensor.tensor(k);
-                    weights_grad_agg_row[k] = (weights_grad_agg_row[k] +
-                                               dim / (float) ServerStore::worker_num);
-                }
-
-            }
-            // 插入第i层的bias
-            if (ServerStore::serverId == 0) {
-                int bias_size = grad.bias().tensor_size();
-                auto &biass_grad_agg_layer = ServerStore::bias_grad_agg[i];
-                for (int j = 0; j < bias_size; j++) {
-                    float dim = grad.bias().tensor(j);
-                    biass_grad_agg_layer[j] = (biass_grad_agg_layer[j] +
-                                               dim / (float) ServerStore::worker_num);
-                }
-            }
-
-        }
-        cout << request->worker_id() << "**************second add end********************" << endl;
-    }
-    lck.unlock();
-
-    // 每个worker累积完梯度就可以释放锁了
-//    pthread_mutex_unlock(&ThreadUtil::mtx_updateModels_addGrad);
-
-    // 有一个线程更新参数,更新参数的前提是所有梯度都已聚合完成
-    // 确保所有机器都已到达
-
-    lck.lock();
-    ThreadUtil::count_worker_for_updateModels++;
-    if (ThreadUtil::count_worker_for_updateModels == ServerStore::worker_num) {
-        ThreadUtil::cv_updateModels.notify_all();
-        ThreadUtil::count_worker_for_updateModels = 0;
-        ThreadUtil::ready_updateModels = false;
-    } else {
-        ThreadUtil::cv_updateModels.wait(lck);
-    }
-
-
-
-
-    // 下面是做check
-    if (request->worker_id() == 0) {
-        cout << "Server: server store weight grad layer num: " << ServerStore::weights_grad_agg.size() << endl;
-        cout << "Server: server store bias layer num: " << ServerStore::bias_grad_agg.size() << endl;
-
-        for (auto weight = ServerStore::weights_grad_agg.begin();
-             weight != ServerStore::weights_grad_agg.end(); weight++) {
-            int weight_row_num = weight->second.size();
-            int weight_col_num = weight->second.begin()->size();
-            cout << "Server: server store weight " << weight->first << " grad size: " << weight_row_num << "*"
-                 << weight_col_num << endl;
-        }
-
-        if (ServerStore::serverId == 0) {
-            for (auto bia = ServerStore::bias_grad_agg.begin(); bia != ServerStore::bias_grad_agg.end(); bia++) {
-                int bia_size = bia->second.size();
-                cout << "Server: server store bia " << bia->first << " grad size: " << bia_size << endl;
-            }
-        }
-
-    }
-
-    // worker 0线程开始负责更新参数
-    if (request->worker_id() == 0) {
-        ServerStore::t++;
-        float beta_1 = 0.9;
-        float beta_2 = 0.999;
-        float epsilon = 5e-4;
-        bool isAdam = true;
-
-        // 如果m_weight_t,v_weight_t,m_bias_t,v_bias_t为空，那么初始化
-        if (ServerStore::m_weight_t.empty()) {
-            for (const auto &weight_grad :ServerStore::weights_grad_agg) {
-                int row_size = weight_grad.second.size();
-                int col_size = weight_grad.second.begin()->size();
-                vector<vector<float>> row(row_size);
-                vector<vector<float>> row2(row_size);
-                for (int i = 0; i < row_size; i++) {
-                    vector<float> vec(col_size);
-                    vector<float> vec2(col_size);
-                    for (int j = 0; j < col_size; j++) {
-                        vec[j] = 0;
-                        vec2[j] = 0;
-                    }
-                    row[i] = vec;
-                    row2[i] = vec2;
-                }
-                ServerStore::m_weight_t.insert(pair<int, vector<vector<float>>>(weight_grad.first, row));
-                ServerStore::v_weight_t.insert(pair<int, vector<vector<float>>>(weight_grad.first, row2));
-            }
-            if (ServerStore::serverId == 0) {
-                for (const auto &bia_grad: ServerStore::bias_grad_agg) {
-                    int bias_size = bia_grad.second.size();
-                    vector<float> vec(bias_size);
-                    vector<float> vec2(bias_size);
-                    for (int i = 0; i < bias_size; i++) {
-                        vec[i] = 0;
-                        vec2[i] = 0;
-                    }
-                    ServerStore::m_bias_t.insert(pair<int, vector<float>>(bia_grad.first, vec));
-                    ServerStore::v_bias_t.insert(pair<int, vector<float>>(bia_grad.first, vec2));
-                }
-            }
-
-
-        }
-
-
-        for (const auto &weight_grad :ServerStore::weights_grad_agg) {
-            int row_size = weight_grad.second.size();
-            int col_size = weight_grad.second.begin()->size();
-            auto &m_weight_t_layer = ServerStore::m_weight_t[weight_grad.first];
-            auto &v_weight_t_layer = ServerStore::v_weight_t[weight_grad.first];
-            auto &weight_t_layer = ServerStore::weights[weight_grad.first];
-            for (int i = 0; i < row_size; i++) {
-                vector<float> vec = weight_grad.second[i];
-                auto &m_weight_t_row = m_weight_t_layer[i];
-                auto &v_weight_t_row = v_weight_t_layer[i];
-                auto &weight_t_row = weight_t_layer[i];
-                for (int j = 0; j < col_size; j++) {
-                    float g_t = vec[j];
-                    if (isAdam) {
-                        m_weight_t_row[j] =
-                                beta_1 * m_weight_t_row[j] + (1 - beta_1) * g_t;
-                        v_weight_t_row[j] =
-                                beta_2 * v_weight_t_row[j] + (1 - beta_2) * g_t * g_t;
-                        float m_cap =
-                                m_weight_t_row[j] / (1 - (pow(beta_1, ServerStore::t)));
-                        float v_cap =
-                                v_weight_t_row[j] / (1 - (pow(beta_2, ServerStore::t)));
-                        weight_t_row[j] -= (alpha * m_cap) / (sqrt(v_cap) + epsilon);
-                    } else {
-                        weight_t_row[j] -= alpha * g_t;
-                    }
-                }
-            }
-        }
-
-        if (ServerStore::serverId == 0) {
-            for (const auto &bia_grad: ServerStore::bias_grad_agg) {
-                vector<float> vec = bia_grad.second;
-                int bias_size = vec.size();
-                auto &m_bias_t_layer = ServerStore::m_bias_t[bia_grad.first];
-                auto &v_bias_t_layer = ServerStore::v_bias_t[bia_grad.first];
-                auto &bias_layer = ServerStore::bias[bia_grad.first];
-                for (int i = 0; i < bias_size; i++) {
-                    float g_t = vec[i];
-                    if (isAdam) {
-                        m_bias_t_layer[i] =
-                                beta_1 * m_bias_t_layer[i] + (1 - beta_1) * g_t;
-                        v_bias_t_layer[i] =
-                                beta_2 * v_bias_t_layer[i] + (1 - beta_2) * g_t * g_t;
-                        float m_cap =
-                                m_bias_t_layer[i] / (1 - (float) (pow(beta_1, ServerStore::t)));
-                        float v_cap =
-                                v_bias_t_layer[i] / (1 - (float) (pow(beta_2, ServerStore::t)));
-
-                        bias_layer[i] -= (alpha * m_cap) / (sqrt(v_cap) + epsilon);
-                    } else {
-                        bias_layer[i] -= alpha * g_t;
-                    }
-                }
-            }
-        }
-    }
-
-
-    return Status::OK;
-}
+//Status ServiceImpl::Server_SendAndUpdateModels(
+//        ServerContext *context, const GradientMessage *request,
+//        BoolMessage *reply) {
+//    // 所有worker等待master清空完梯度聚合后，继续执行
+//    if (request->worker_id() == 0) {
+//        unique_lock<mutex> lck(ThreadUtil::mtx_updateModels);
+//        if (ServerStore::serverId == 0) {
+//            ServerStore::bias_grad_agg.clear();
+//            cout << "*********bias_grad_agg_is_cleared**********" << endl;
+//            cout << ServerStore::bias_grad_agg.size() << endl;
+//        }
+//        ServerStore::weights_grad_agg.clear();
+//        cout << "*********weights_grad_agg_is_cleared**********" << endl;
+//        cout << ServerStore::weights_grad_agg.size() << endl;
+//        ThreadUtil::ready_updateModels = true;
+//        ThreadUtil::cv_updateModels.notify_all();
+//    } else {
+//        unique_lock<mutex> lck(ThreadUtil::mtx_updateModels);
+//        while (!ThreadUtil::ready_updateModels) {
+//            ThreadUtil::cv_updateModels.wait(lck);
+//        }
+//    }
+//    float alpha = request->lr();
+//    // 多个worker一起更新参数，先聚合所有worker的梯度
+//    // 聚合worker的梯度时，先上锁
+////    pthread_mutex_lock(&ThreadUtil::mtx_updateModels_addGrad);
+//    unique_lock<mutex> lck(ThreadUtil::mtx_updateModels);
+//
+//    int layerNum = request->grads_size();
+//    cout << "**********layer number*********: " << layerNum << endl;
+//
+//    // 判断是否已经被初始化了，如果未被初始化，那么直接用这台机器的梯度初始化ServerStore中的grad
+//    if (ServerStore::weights_grad_agg.count(0) == 0) {
+//        // 对于每一层的梯度聚合
+//        cout << request->worker_id() << "**************first add start********************" << endl;
+//
+//        for (int i = 0; i < layerNum; i++) {
+//            const auto &grad = request->grads(i);
+//            int weight_size = grad.weights_size();
+//            int tensor_size = grad.weights().begin()->tensor_size();
+//
+//
+//            vector<vector<float>> weight_grad(weight_size);
+//            // 这里获取的是每一个WeightAndBiasMessage
+//            //先遍历Weight,这一层是遍历每一个TensorMessage
+//
+//            for (int j = 0; j < weight_size; j++) {
+//                const auto tensor = grad.weights(j);
+//
+//                vector<float> grad_row(tensor_size);
+//                for (int k = 0; k < tensor_size; k++) {
+//                    float dim = tensor.tensor(k);
+//                    grad_row[k] = (dim / (float) ServerStore::worker_num);
+//                }
+//                weight_grad[j] = grad_row;
+//            }
+//            ServerStore::weights_grad_agg.insert(pair<int, vector<vector<float>>>(i, weight_grad));
+//
+//            // 插入第i层的bias
+//            if (ServerStore::serverId == 0) {
+//                int tensorSize = grad.bias().tensor_size();
+//                vector<float> bia_grad(tensorSize);
+//                for (int j = 0; j < tensorSize; j++) {
+//                    float dim = grad.bias().tensor(j);
+//                    bia_grad[j] = (dim / (float) ServerStore::worker_num);
+//                }
+//                ServerStore::bias_grad_agg.insert(pair<int, vector<float>>(i, bia_grad));
+//            }
+//
+//        }
+//        cout << request->worker_id() << "**************first add end********************" << endl;
+//    } else {
+//        // 已经有初始化的值了，因此需要做累加
+//        // 对于每一层的梯度聚合
+//        cout << request->worker_id() << "**************second add start********************" << endl;
+//
+//        for (int i = 0; i < layerNum; i++) {
+//            const auto &grad = request->grads(i);
+//            auto &weights_grad_agg_layer = ServerStore::weights_grad_agg[i];
+//            // 这里获取的是每一个WeightAndBiasMessage
+//            //先遍历Weight,这一层是遍历每一个TensorMessage
+//            int weight_size = grad.weights_size();
+//            int tensor_size = grad.weights().begin()->tensor_size();
+//            for (int j = 0; j < weight_size; j++) {
+//                const auto &tensor = grad.weights(j);
+//                auto &weights_grad_agg_row = weights_grad_agg_layer[j];
+//                for (int k = 0; k < tensor_size; k++) {
+//                    float dim = tensor.tensor(k);
+//                    weights_grad_agg_row[k] = (weights_grad_agg_row[k] +
+//                                               dim / (float) ServerStore::worker_num);
+//                }
+//
+//            }
+//            // 插入第i层的bias
+//            if (ServerStore::serverId == 0) {
+//                int bias_size = grad.bias().tensor_size();
+//                auto &biass_grad_agg_layer = ServerStore::bias_grad_agg[i];
+//                for (int j = 0; j < bias_size; j++) {
+//                    float dim = grad.bias().tensor(j);
+//                    biass_grad_agg_layer[j] = (biass_grad_agg_layer[j] +
+//                                               dim / (float) ServerStore::worker_num);
+//                }
+//            }
+//
+//        }
+//        cout << request->worker_id() << "**************second add end********************" << endl;
+//    }
+//    lck.unlock();
+//
+//    // 每个worker累积完梯度就可以释放锁了
+////    pthread_mutex_unlock(&ThreadUtil::mtx_updateModels_addGrad);
+//
+//    // 有一个线程更新参数,更新参数的前提是所有梯度都已聚合完成
+//    // 确保所有机器都已到达
+//
+//    lck.lock();
+//    ThreadUtil::count_worker_for_updateModels++;
+//    if (ThreadUtil::count_worker_for_updateModels == ServerStore::worker_num) {
+//        ThreadUtil::cv_updateModels.notify_all();
+//        ThreadUtil::count_worker_for_updateModels = 0;
+//        ThreadUtil::ready_updateModels = false;
+//    } else {
+//        ThreadUtil::cv_updateModels.wait(lck);
+//    }
+//
+//
+//
+//
+//    // 下面是做check
+//    if (request->worker_id() == 0) {
+//        cout << "Server: server store weight grad layer num: " << ServerStore::weights_grad_agg.size() << endl;
+//        cout << "Server: server store bias layer num: " << ServerStore::bias_grad_agg.size() << endl;
+//
+//        for (auto weight = ServerStore::weights_grad_agg.begin();
+//             weight != ServerStore::weights_grad_agg.end(); weight++) {
+//            int weight_row_num = weight->second.size();
+//            int weight_col_num = weight->second.begin()->size();
+//            cout << "Server: server store weight " << weight->first << " grad size: " << weight_row_num << "*"
+//                 << weight_col_num << endl;
+//        }
+//
+//        if (ServerStore::serverId == 0) {
+//            for (auto bia = ServerStore::bias_grad_agg.begin(); bia != ServerStore::bias_grad_agg.end(); bia++) {
+//                int bia_size = bia->second.size();
+//                cout << "Server: server store bia " << bia->first << " grad size: " << bia_size << endl;
+//            }
+//        }
+//
+//    }
+//
+//    // worker 0线程开始负责更新参数
+//    if (request->worker_id() == 0) {
+//        ServerStore::t++;
+//        float beta_1 = 0.9;
+//        float beta_2 = 0.999;
+//        float epsilon = 5e-4;
+//        bool isAdam = true;
+//
+//        // 如果m_weight_t,v_weight_t,m_bias_t,v_bias_t为空，那么初始化
+//        if (ServerStore::m_weight_t.empty()) {
+//            for (const auto &weight_grad :ServerStore::weights_grad_agg) {
+//                int row_size = weight_grad.second.size();
+//                int col_size = weight_grad.second.begin()->size();
+//                vector<vector<float>> row(row_size);
+//                vector<vector<float>> row2(row_size);
+//                for (int i = 0; i < row_size; i++) {
+//                    vector<float> vec(col_size);
+//                    vector<float> vec2(col_size);
+//                    for (int j = 0; j < col_size; j++) {
+//                        vec[j] = 0;
+//                        vec2[j] = 0;
+//                    }
+//                    row[i] = vec;
+//                    row2[i] = vec2;
+//                }
+//                ServerStore::m_weight_t.insert(pair<int, vector<vector<float>>>(weight_grad.first, row));
+//                ServerStore::v_weight_t.insert(pair<int, vector<vector<float>>>(weight_grad.first, row2));
+//            }
+//            if (ServerStore::serverId == 0) {
+//                for (const auto &bia_grad: ServerStore::bias_grad_agg) {
+//                    int bias_size = bia_grad.second.size();
+//                    vector<float> vec(bias_size);
+//                    vector<float> vec2(bias_size);
+//                    for (int i = 0; i < bias_size; i++) {
+//                        vec[i] = 0;
+//                        vec2[i] = 0;
+//                    }
+//                    ServerStore::m_bias_t.insert(pair<int, vector<float>>(bia_grad.first, vec));
+//                    ServerStore::v_bias_t.insert(pair<int, vector<float>>(bia_grad.first, vec2));
+//                }
+//            }
+//
+//
+//        }
+//
+//
+//        for (const auto &weight_grad :ServerStore::weights_grad_agg) {
+//            int row_size = weight_grad.second.size();
+//            int col_size = weight_grad.second.begin()->size();
+//            auto &m_weight_t_layer = ServerStore::m_weight_t[weight_grad.first];
+//            auto &v_weight_t_layer = ServerStore::v_weight_t[weight_grad.first];
+//            auto &weight_t_layer = ServerStore::weights[weight_grad.first];
+//            for (int i = 0; i < row_size; i++) {
+//                vector<float> vec = weight_grad.second[i];
+//                auto &m_weight_t_row = m_weight_t_layer[i];
+//                auto &v_weight_t_row = v_weight_t_layer[i];
+//                auto &weight_t_row = weight_t_layer[i];
+//                for (int j = 0; j < col_size; j++) {
+//                    float g_t = vec[j];
+//                    if (isAdam) {
+//                        m_weight_t_row[j] =
+//                                beta_1 * m_weight_t_row[j] + (1 - beta_1) * g_t;
+//                        v_weight_t_row[j] =
+//                                beta_2 * v_weight_t_row[j] + (1 - beta_2) * g_t * g_t;
+//                        float m_cap =
+//                                m_weight_t_row[j] / (1 - (pow(beta_1, ServerStore::t)));
+//                        float v_cap =
+//                                v_weight_t_row[j] / (1 - (pow(beta_2, ServerStore::t)));
+//                        weight_t_row[j] -= (alpha * m_cap) / (sqrt(v_cap) + epsilon);
+//                    } else {
+//                        weight_t_row[j] -= alpha * g_t;
+//                    }
+//                }
+//            }
+//        }
+//
+//        if (ServerStore::serverId == 0) {
+//            for (const auto &bia_grad: ServerStore::bias_grad_agg) {
+//                vector<float> vec = bia_grad.second;
+//                int bias_size = vec.size();
+//                auto &m_bias_t_layer = ServerStore::m_bias_t[bia_grad.first];
+//                auto &v_bias_t_layer = ServerStore::v_bias_t[bia_grad.first];
+//                auto &bias_layer = ServerStore::bias[bia_grad.first];
+//                for (int i = 0; i < bias_size; i++) {
+//                    float g_t = vec[i];
+//                    if (isAdam) {
+//                        m_bias_t_layer[i] =
+//                                beta_1 * m_bias_t_layer[i] + (1 - beta_1) * g_t;
+//                        v_bias_t_layer[i] =
+//                                beta_2 * v_bias_t_layer[i] + (1 - beta_2) * g_t * g_t;
+//                        float m_cap =
+//                                m_bias_t_layer[i] / (1 - (float) (pow(beta_1, ServerStore::t)));
+//                        float v_cap =
+//                                v_bias_t_layer[i] / (1 - (float) (pow(beta_2, ServerStore::t)));
+//
+//                        bias_layer[i] -= (alpha * m_cap) / (sqrt(v_cap) + epsilon);
+//                    } else {
+//                        bias_layer[i] -= alpha * g_t;
+//                    }
+//                }
+//            }
+//        }
+//    }
+//
+//
+//    return Status::OK;
+//}
 
 void ServiceImpl::RunServerByPy(const string &address, int serverId) {
     ServiceImpl service;
@@ -4358,7 +4358,96 @@ Status ServiceImpl::server_PullParams(ServerContext *context, const StringM *req
     return Status::OK;
 }
 
-Status ServiceImpl::server_updateModels(ServerContext *context, const GradMessage *request, BoolMessage *reply) {
+//Status ServiceImpl::server_updateModels(ServerContext *context, const GradMessage *request, BoolMessage *reply) {
+//    if (request->wid() == 0) {
+//        unique_lock<mutex> lck(ThreadUtil::mtx_updateModels);
+//        ServerStore::grads_agg[request->grad().id()].clear();
+//        // vector is initialized as 0 by default
+//        vector<float> tmp(request->grad().elems_size());
+//        ServerStore::grads_agg[request->grad().id()] = tmp;
+//        cout << "********server_updateModels-clear gradient aggregations******" << endl;
+//        ThreadUtil::ready_updateModels = true;
+//        ThreadUtil::cv_updateModels.notify_all();
+//    } else {
+//        unique_lock<mutex> lck(ThreadUtil::mtx_updateModels);
+//        while (!ThreadUtil::ready_updateModels) {
+//            ThreadUtil::cv_updateModels.wait(lck);
+//        }
+//    }
+//    int grad_size = request->grad().elems_size();
+//    string grad_id = request->grad().id();
+//    float alpha = request->lr();
+//    int wid = request->wid();
+//
+//    // 多个worker一起更新参数，先聚合所有worker的梯度
+//    // 聚合worker的梯度时，先上锁
+////    pthread_mutex_lock(&ThreadUtil::mtx_updateModels_addGrad);
+//    unique_lock<mutex> lck(ThreadUtil::mtx_updateModels);
+//
+//    auto &grad_agg = ServerStore::grads_agg[grad_id];
+//    // add gradients to grads_agg
+//    for (int i = 0; i < grad_size; i++) {
+//        grad_agg[i] = grad_agg[i] + request->grad().elems(i);
+//    }
+//    cout << "********server_updateModels----gradient aggregating end******" << endl;
+//    lck.unlock();
+//
+//    // 每个worker累积完梯度就可以释放锁了
+////    pthread_mutex_unlock(&ThreadUtil::mtx_updateModels_addGrad);
+//
+//    // 有一个线程更新参数,更新参数的前提是所有梯度都已聚合完成
+//    // 确保所有机器都已到达
+//
+//    lck.lock();
+//    ThreadUtil::count_worker_for_updateModels++;
+//    if (ThreadUtil::count_worker_for_updateModels == ServerStore::worker_num) {
+//        ThreadUtil::cv_updateModels.notify_all();
+//        ThreadUtil::count_worker_for_updateModels = 0;
+//        ThreadUtil::ready_updateModels = false;
+//    } else {
+//        ThreadUtil::cv_updateModels.wait(lck);
+//    }
+//
+//    // 下面是做check
+//    if (wid == 0) {
+//        cout << ThreadUtil::count_worker_for_updateModels << " workers have been added into the gradient aggregations!"
+//             << endl;
+//        cout << "param id:" << grad_id << "," << "grad size:" << grad_agg.size() << endl;
+//    }
+//
+//    // worker 0线程开始负责更新参数
+//    if (wid == 0) {
+//        ServerStore::t++;
+//        float beta_1 = 0.9;
+//        float beta_2 = 0.999;
+//        float epsilon = 5e-4;
+//        bool isAdam = true;
+//        auto &m_grads_t = ServerStore::m_grads_t[grad_id];
+//        auto &v_grads_t = ServerStore::v_grads_t[grad_id];
+//        auto &param = ServerStore::params[grad_id];
+//        // 如果m_weight_t,v_weight_t,m_bias_t,v_bias_t为空，那么初始化
+//        for (int i = 0; i < grad_size; i++) {
+//            float g_t = grad_agg[i]/ServerStore::worker_num;
+//            if (isAdam) {
+//                m_grads_t[i] = beta_1 * m_grads_t[i] + (1 - beta_1) * g_t;
+//                v_grads_t[i] = beta_2 * v_grads_t[i] + (1 - beta_2) * g_t * g_t;
+//                float m_cap = m_grads_t[i] / (1 - (pow(beta_1, ServerStore::t)));
+//                float v_cap = v_grads_t[i] / (1 - (pow(beta_2, ServerStore::t)));
+//                param[i] -= (alpha * m_cap) / (sqrt(v_cap) + epsilon);
+//            } else {
+//                param[i] -= alpha * g_t;
+//            }
+//        }
+//
+//
+//    }
+//
+//
+//    return Status::OK;
+//}
+
+
+Status ServiceImpl::server_updateParam(ServerContext *context, const GradMessage *request, BoolMessage *reply) {
     if (request->wid() == 0) {
         unique_lock<mutex> lck(ThreadUtil::mtx_updateModels);
         ServerStore::grads_agg[request->grad().id()].clear();
@@ -4387,8 +4476,9 @@ Status ServiceImpl::server_updateModels(ServerContext *context, const GradMessag
     auto &grad_agg = ServerStore::grads_agg[grad_id];
     // add gradients to grads_agg
     for (int i = 0; i < grad_size; i++) {
-        grad_agg[i] += grad_agg[i] + request->grad().elems(i);
+        grad_agg[i] = grad_agg[i] + request->grad().elems(i);
     }
+
     cout << "********server_updateModels----gradient aggregating end******" << endl;
     lck.unlock();
 
@@ -4427,7 +4517,7 @@ Status ServiceImpl::server_updateModels(ServerContext *context, const GradMessag
         auto &param = ServerStore::params[grad_id];
         // 如果m_weight_t,v_weight_t,m_bias_t,v_bias_t为空，那么初始化
         for (int i = 0; i < grad_size; i++) {
-            float g_t = grad_agg[i];
+            float g_t = grad_agg[i]/ServerStore::worker_num;
             if (isAdam) {
                 m_grads_t[i] = beta_1 * m_grads_t[i] + (1 - beta_1) * g_t;
                 v_grads_t[i] = beta_2 * v_grads_t[i] + (1 - beta_2) * g_t * g_t;
@@ -4441,78 +4531,75 @@ Status ServiceImpl::server_updateModels(ServerContext *context, const GradMessag
 
 
     }
-
-
     return Status::OK;
 }
 
-
-Status ServiceImpl::server_aggGrad(ServerContext *context, const GradMessage *request, GradMessage *reply) {
-    // fix the adam
-    if (request->wid() == 0) {
-        unique_lock<mutex> lck(ThreadUtil::mtx_updateModels);
-        ServerStore::grads_agg[request->grad().id()].clear();
-        // vector is initialized as 0 by default
-        vector<float> tmp(request->grad().elems_size());
-        ServerStore::grads_agg[request->grad().id()] = tmp;
-        cout << "********server_updateModels-clear gradient aggregations******" << endl;
-        ThreadUtil::ready_updateModels = true;
-        ThreadUtil::cv_updateModels.notify_all();
-    } else {
-        unique_lock<mutex> lck(ThreadUtil::mtx_updateModels);
-        while (!ThreadUtil::ready_updateModels) {
-            ThreadUtil::cv_updateModels.wait(lck);
-        }
-    }
-    int grad_size = request->grad().elems_size();
-    string grad_id = request->grad().id();
-    float alpha = request->lr();
-    int wid = request->wid();
-
-    // 多个worker一起更新参数，先聚合所有worker的梯度
-    // 聚合worker的梯度时，先上锁
-//    pthread_mutex_lock(&ThreadUtil::mtx_updateModels_addGrad);
-    unique_lock<mutex> lck(ThreadUtil::mtx_updateModels);
-
-    auto &grad_agg = ServerStore::grads_agg[grad_id];
-    // add gradients to grads_agg
-    for (int i = 0; i < grad_size; i++) {
-        grad_agg[i] += grad_agg[i] + request->grad().elems(i);
-    }
-    cout << "********server_updateModels----gradient aggregating end******" << endl;
-    lck.unlock();
-
-    // 每个worker累积完梯度就可以释放锁了
-//    pthread_mutex_unlock(&ThreadUtil::mtx_updateModels_addGrad);
-
-    // 有一个线程更新参数,更新参数的前提是所有梯度都已聚合完成
-    // 确保所有机器都已到达
-
-    lck.lock();
-    ThreadUtil::count_worker_for_updateModels++;
-    if (ThreadUtil::count_worker_for_updateModels == ServerStore::worker_num) {
-        ThreadUtil::cv_updateModels.notify_all();
-        ThreadUtil::count_worker_for_updateModels = 0;
-        ThreadUtil::ready_updateModels = false;
-    } else {
-        ThreadUtil::cv_updateModels.wait(lck);
-    }
-
-    // 下面是做check
-    if (wid == 0) {
-        cout << ThreadUtil::count_worker_for_updateModels << " workers have been added into the gradient aggregations!"
-             << endl;
-        cout << "param id:" << grad_id << "," << "grad size:" << grad_agg.size() << endl;
-    }
-
-
-    auto *grad_message_tmp = reply->grad().New();
-    grad_message_tmp->mutable_elems()->Add(grad_agg.begin(), grad_agg.end());
-    grad_message_tmp->set_id(grad_id);
-    reply->set_allocated_grad(grad_message_tmp);
-
-    return Status::OK;
-}
+//Status ServiceImpl::server_aggGrad(ServerContext *context, const GradMessage *request, GradMessage *reply) {
+//    // fix the adam
+//    if (request->wid() == 0) {
+//        unique_lock<mutex> lck(ThreadUtil::mtx_updateModels);
+//        ServerStore::grads_agg[request->grad().id()].clear();
+//        // vector is initialized as 0 by default
+//        vector<float> tmp(request->grad().elems_size());
+//        ServerStore::grads_agg[request->grad().id()] = tmp;
+//        cout << "********server_updateModels-clear gradient aggregations******" << endl;
+//        ThreadUtil::ready_updateModels = true;
+//        ThreadUtil::cv_updateModels.notify_all();
+//    } else {
+//        unique_lock<mutex> lck(ThreadUtil::mtx_updateModels);
+//        while (!ThreadUtil::ready_updateModels) {
+//            ThreadUtil::cv_updateModels.wait(lck);
+//        }
+//    }
+//    int grad_size = request->grad().elems_size();
+//    string grad_id = request->grad().id();
+//    float alpha = request->lr();
+//    int wid = request->wid();
+//
+//    // 多个worker一起更新参数，先聚合所有worker的梯度
+//    // 聚合worker的梯度时，先上锁
+////    pthread_mutex_lock(&ThreadUtil::mtx_updateModels_addGrad);
+//    unique_lock<mutex> lck(ThreadUtil::mtx_updateModels);
+//
+//    auto &grad_agg = ServerStore::grads_agg[grad_id];
+//    // add gradients to grads_agg
+//    for (int i = 0; i < grad_size; i++) {
+//        grad_agg[i] += grad_agg[i] + request->grad().elems(i);
+//    }
+//    cout << "********server_updateModels----gradient aggregating end******" << endl;
+//    lck.unlock();
+//
+//    // 每个worker累积完梯度就可以释放锁了
+////    pthread_mutex_unlock(&ThreadUtil::mtx_updateModels_addGrad);
+//
+//    // 有一个线程更新参数,更新参数的前提是所有梯度都已聚合完成
+//    // 确保所有机器都已到达
+//
+//    lck.lock();
+//    ThreadUtil::count_worker_for_updateModels++;
+//    if (ThreadUtil::count_worker_for_updateModels == ServerStore::worker_num) {
+//        ThreadUtil::cv_updateModels.notify_all();
+//        ThreadUtil::count_worker_for_updateModels = 0;
+//        ThreadUtil::ready_updateModels = false;
+//    } else {
+//        ThreadUtil::cv_updateModels.wait(lck);
+//    }
+//
+//    // 下面是做check
+//    if (wid == 0) {
+//        cout << ThreadUtil::count_worker_for_updateModels << " workers have been added into the gradient aggregations!"
+//             << endl;
+//        cout << "param id:" << grad_id << "," << "grad size:" << grad_agg.size() << endl;
+//    }
+//
+//
+//    auto *grad_message_tmp = reply->grad().New();
+//    grad_message_tmp->mutable_elems()->Add(grad_agg.begin(), grad_agg.end());
+//    grad_message_tmp->set_id(grad_id);
+//    reply->set_allocated_grad(grad_message_tmp);
+//
+//    return Status::OK;
+//}
 
 Status ServiceImpl::workerSendNode(ServerContext *context, const NodeMessage *request, BoolMessage *reply) {
     unique_lock<mutex> lck(ThreadUtil::mtx_sendNode);

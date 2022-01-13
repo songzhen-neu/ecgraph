@@ -10,10 +10,8 @@ syntax = "proto3";
 package dgnn_test;
 
 service DgnnProtoService{
-  rpc add1(intM) returns (intM){}
   rpc sendDataToEachWorker(DataMessage) returns (BoolMessage){}
   rpc pullDataFromServer(intM) returns (DataMessage){}
-  rpc pullDataFromMaster(ContextMessage) returns (DataMessage){}
   rpc pullDataFromMasterGeneral(ContextMessage) returns (DataMessage){}
   rpc initParameter(NetInfoMessage) returns (BoolMessage){}
   rpc pullWeights(IntMessage) returns (WeightsAndBiasMessage){}
@@ -21,7 +19,6 @@ service DgnnProtoService{
   rpc barrier(BoolMessage) returns(BoolMessage){}
   rpc workerPullEmb(EmbMessage) returns(EmbMessage){}
   rpc workerPullEmb_fb(EmbMessage) returns(EmbMessage){}
-  rpc Server_SendAndUpdateModels(GradientMessage) returns(BoolMessage){}
   rpc TestVariant(TestVMessage) returns(BoolMessage) {}
   rpc Test1Bit(BitArrayMessage) returns(BitArrayMessage) {}
   rpc workerPullEmbCompress(EmbMessage) returns(EmbMessage){}
@@ -29,7 +26,6 @@ service DgnnProtoService{
   rpc workerPullGCompress(EmbMessage) returns(EmbMessage){}
   rpc testLargeSize(LargeMessage) returns (LargeMessage){}
   rpc testSmallSize(SmallMessage) returns (SmallMessage){}
-//  rpc workerPullEmbCompress_iter(EmbMessage) returns(EmbMessage){}
   rpc workerPullEmbTrend(EmbMessage) returns(EmbMessage){}
   rpc workerPullEmbTrendSelect(EmbMessage) returns(EmbMessage){}
   rpc sendAccuracy(AccuracyMessage) returns(AccuracyMessage){}
@@ -42,9 +38,7 @@ service DgnnProtoService{
   rpc workerSendTestNode(NodeMessage) returns(BoolMessage){}
   rpc serverSendTestNode(ContextMessage) returns(NodeMessage){}
   rpc server_PullParams(StringM) returns(Param){};
-  rpc server_updateModels(GradMessage) returns(BoolMessage){};
-  rpc server_aggGrad(GradMessage) returns (GradMessage){};
-
+  rpc server_updateParam(GradMessage) returns(BoolMessage){};
   rpc workerSendNode(NodeMessage) returns(BoolMessage){}
   rpc serverSendNode(NodeMessage) returns(NodeMessage){}
 }
