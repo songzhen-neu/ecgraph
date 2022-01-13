@@ -12,7 +12,7 @@ target_compile_definitions(caresinternal INTERFACE HAVE_CONFIG_H=1)
 
 target_include_directories(caresinternal
    INTERFACE "${PROJECT_BINARY_DIR}"
-             "${PROJECT_SOURCE_DIR}"
+             "../../.."
              "${PROJECT_SOURCE_DIR}/src/lib"
              "${CARES_TOPLEVEL_DIR}/include"
              "${CMAKE_INSTALL_INCLUDEDIR}"
@@ -62,16 +62,16 @@ target_link_libraries(dnsdump PRIVATE caresinternal)
 
 add_test(NAME arestest COMMAND $<TARGET_FILE:arestest>)
 
-file(GLOB_RECURSE FUZZINPUT_FILES RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}/fuzzinput" "fuzzinput/*")
+file(GLOB_RECURSE FUZZINPUT_FILES RELATIVE "fuzzinput" "fuzzinput/*")
 add_test(
   NAME aresfuzz
-  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/fuzzinput"
+  WORKING_DIRECTORY "fuzzinput"
   COMMAND $<TARGET_FILE:aresfuzz> ${FUZZINPUT_FILES}
 )
 
-file(GLOB_RECURSE FUZZNAMES_FILES RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}/fuzznames" "fuzznames/*")
+file(GLOB_RECURSE FUZZNAMES_FILES RELATIVE "fuzznames" "fuzznames/*")
 add_test(
   NAME aresfuzzname
-  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/fuzznames"
+  WORKING_DIRECTORY "fuzznames"
   COMMAND $<TARGET_FILE:aresfuzzname> ${FUZZNAMES_FILES}
 )
